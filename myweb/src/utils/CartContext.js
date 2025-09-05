@@ -16,83 +16,117 @@ export const useCart = () => {
 export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, getAuthHeaders } = useAuth();
 
-  // Wrap loadCart in useCallback to stabilize its reference
+  // Create a more robust API instance with auth headers
+  const makeAuthenticatedRequest = useCallback(async (url, options = {}) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+      ...options.headers
+    };
+
+    const response = await fetch(`http://localhost:5000/api${url}`, {
+      ...options,
+      headers
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  }, [getAuthHeaders]);
+
+  // Load cart from API when user logs in
   const loadCart = useCallback(async () => {
     if (!isAuthenticated()) return;
     
     try {
       setLoading(true);
-      const response = await api.get('/cart');
-      setCart(response.data.items || []);
+      console.log('Loading cart for authenticated user...');
+      
+      const response = await makeAuthenticatedRequest('/cart');
+      console.log('Cart loaded:', response);
+      
+      setCart(response.items || []);
     } catch (error) {
       console.error('Failed to load cart:', error);
+      // Fallback to empty cart on error
+      setCart([]);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, makeAuthenticatedRequest]);
 
-  // Load cart from API when user logs in
+  // Load cart data when auth state changes
   useEffect(() => {
     if (isAuthenticated()) {
       loadCart();
       
       // Listen for real-time cart updates
-      SocketService.onCartUpdate((updatedCart) => {
-        setCart(updatedCart.items || []);
-      });
-    } else {
-      // Load cart from localStorage for non-authenticated users
-      const savedCart = localStorage.getItem('guest_cart');
-      if (savedCart) {
-        try {
-          setCart(JSON.parse(savedCart));
-        } catch (error) {
-          console.error('Failed to parse guest cart:', error);
-          setCart([]);
-        }
+      if (SocketService && typeof SocketService.onCartUpdate === 'function') {
+        SocketService.onCartUpdate((updatedCart) => {
+          console.log('Cart updated via socket:', updatedCart);
+          setCart(updatedCart.items || []);
+        });
       }
+    } else {
+      // Load cart from memory for non-authenticated users (no localStorage)
+      console.log('Loading guest cart from memory...');
+      setCart([]); // Start with empty cart for guests
     }
 
     // Cleanup socket listener on unmount
     return () => {
-      SocketService.off('cartUpdate');
+      if (SocketService && typeof SocketService.off === 'function') {
+        SocketService.off('cartUpdate');
+      }
     };
   }, [user, isAuthenticated, loadCart]);
 
-  // Save guest cart to localStorage
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      localStorage.setItem('guest_cart', JSON.stringify(cart));
-    }
-  }, [cart, isAuthenticated]);
-
   const addToCart = async (phone, quantity = 1) => {
     try {
+      console.log('Adding to cart:', phone, 'Quantity:', quantity, 'Authenticated:', isAuthenticated());
+      
       if (isAuthenticated()) {
-        // Add to server cart
-        const response = await api.post('/cart/add', {
-          phoneId: phone.id,
-          quantity
-        });
-        setCart(response.data.items || []);
+        // Add to server cart for authenticated users
+        console.log('Adding to server cart...');
         
-        // Show success notification
+        const response = await makeAuthenticatedRequest('/cart/add', {
+          method: 'POST',
+          body: JSON.stringify({
+            phoneId: phone._id || phone.id,
+            quantity
+          })
+        });
+        
+        console.log('Server cart response:', response);
+        setCart(response.items || []);
+        
         return { success: true, message: 'Item added to cart' };
       } else {
-        // Add to local cart for guest users
+        // Add to local cart for guest users (in-memory only)
+        console.log('Adding to guest cart...');
+        
         setCart(prevCart => {
-          const existingItem = prevCart.find(item => item.id === phone.id);
+          const existingItem = prevCart.find(item => 
+            (item._id || item.id) === (phone._id || phone.id)
+          );
           
           if (existingItem) {
             return prevCart.map(item =>
-              item.id === phone.id
+              (item._id || item.id) === (phone._id || phone.id)
                 ? { ...item, quantity: item.quantity + quantity }
                 : item
             );
           } else {
-            return [...prevCart, { ...phone, quantity }];
+            return [...prevCart, { 
+              ...phone, 
+              id: phone._id || phone.id, // Ensure consistent ID
+              quantity 
+            }];
           }
         });
         
@@ -102,7 +136,7 @@ export const CartProvider = ({ children }) => {
       console.error('Failed to add item to cart:', error);
       return { 
         success: false, 
-        message: error.response?.data?.message || 'Failed to add item to cart' 
+        message: error.message || 'Failed to add item to cart' 
       };
     }
   };
@@ -111,13 +145,17 @@ export const CartProvider = ({ children }) => {
     try {
       if (isAuthenticated()) {
         // Remove from server cart
-        const response = await api.delete(`/cart/remove/${phoneId}`);
-        setCart(response.data.items || []);
+        const response = await makeAuthenticatedRequest(`/cart/remove/${phoneId}`, {
+          method: 'DELETE'
+        });
+        setCart(response.items || []);
         
         return { success: true, message: 'Item removed from cart' };
       } else {
         // Remove from local cart for guest users
-        setCart(prevCart => prevCart.filter(item => item.id !== phoneId));
+        setCart(prevCart => prevCart.filter(item => 
+          (item._id || item.id) !== phoneId
+        ));
         
         return { success: true, message: 'Item removed from cart' };
       }
@@ -125,7 +163,7 @@ export const CartProvider = ({ children }) => {
       console.error('Failed to remove item from cart:', error);
       return { 
         success: false, 
-        message: error.response?.data?.message || 'Failed to remove item from cart' 
+        message: error.message || 'Failed to remove item from cart' 
       };
     }
   };
@@ -138,18 +176,21 @@ export const CartProvider = ({ children }) => {
     try {
       if (isAuthenticated()) {
         // Update on server
-        const response = await api.put('/cart/update', {
-          phoneId,
-          quantity
+        const response = await makeAuthenticatedRequest('/cart/update', {
+          method: 'PUT',
+          body: JSON.stringify({
+            phoneId,
+            quantity
+          })
         });
-        setCart(response.data.items || []);
+        setCart(response.items || []);
         
         return { success: true, message: 'Quantity updated' };
       } else {
         // Update local cart for guest users
         setCart(prevCart =>
           prevCart.map(item =>
-            item.id === phoneId
+            (item._id || item.id) === phoneId
               ? { ...item, quantity }
               : item
           )
@@ -161,7 +202,7 @@ export const CartProvider = ({ children }) => {
       console.error('Failed to update quantity:', error);
       return { 
         success: false, 
-        message: error.response?.data?.message || 'Failed to update quantity' 
+        message: error.message || 'Failed to update quantity' 
       };
     }
   };
@@ -170,14 +211,15 @@ export const CartProvider = ({ children }) => {
     try {
       if (isAuthenticated()) {
         // Clear server cart
-        await api.delete('/cart/clear');
+        await makeAuthenticatedRequest('/cart/clear', {
+          method: 'DELETE'
+        });
         setCart([]);
         
         return { success: true, message: 'Cart cleared' };
       } else {
         // Clear local cart for guest users
         setCart([]);
-        localStorage.removeItem('guest_cart');
         
         return { success: true, message: 'Cart cleared' };
       }
@@ -185,40 +227,16 @@ export const CartProvider = ({ children }) => {
       console.error('Failed to clear cart:', error);
       return { 
         success: false, 
-        message: error.response?.data?.message || 'Failed to clear cart' 
+        message: error.message || 'Failed to clear cart' 
       };
     }
   };
 
   const mergeGuestCart = async () => {
-    // Merge guest cart with user cart when user logs in
-    if (!isAuthenticated()) return;
-
-    const guestCart = localStorage.getItem('guest_cart');
-    if (!guestCart) return;
-
-    try {
-      const guestItems = JSON.parse(guestCart);
-      if (guestItems.length === 0) return;
-
-      // Send guest cart items to server for merging
-      const response = await api.post('/cart/merge', {
-        guestItems
-      });
-
-      setCart(response.data.items || []);
-      
-      // Clear guest cart from localStorage
-      localStorage.removeItem('guest_cart');
-      
-      return { success: true, message: 'Cart items merged successfully' };
-    } catch (error) {
-      console.error('Failed to merge guest cart:', error);
-      return { 
-        success: false, 
-        message: 'Failed to merge cart items' 
-      };
-    }
+    // For this version, we'll skip guest cart merging since we're not using localStorage
+    // You can implement this later if needed
+    console.log('Guest cart merging not implemented in this version');
+    return { success: true, message: 'No guest cart to merge' };
   };
 
   const getCartTotal = () => {
@@ -233,11 +251,11 @@ export const CartProvider = ({ children }) => {
   };
 
   const isInCart = (phoneId) => {
-    return cart.some(item => item.id === phoneId);
+    return cart.some(item => (item._id || item.id) === phoneId);
   };
 
   const getItemQuantity = (phoneId) => {
-    const item = cart.find(item => item.id === phoneId);
+    const item = cart.find(item => (item._id || item.id) === phoneId);
     return item ? item.quantity : 0;
   };
 
@@ -254,23 +272,24 @@ export const CartProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      const response = await api.post('/checkout/initialize', {
-        items: cart,
-        shippingAddress,
-        paymentMethod,
-        total: getCartTotal()
+      const response = await makeAuthenticatedRequest('/checkout/initialize', {
+        method: 'POST',
+        body: JSON.stringify({
+          items: cart,
+          shippingAddress,
+          paymentMethod,
+          total: getCartTotal()
+        })
       });
 
       return {
         success: true,
-        checkoutSession: response.data.checkoutSession,
-        orderId: response.data.orderId
+        checkoutSession: response.checkoutSession,
+        orderId: response.orderId
       };
     } catch (error) {
       console.error('Failed to initialize checkout:', error);
-      throw new Error(
-        error.response?.data?.message || 'Failed to initialize checkout'
-      );
+      throw new Error(error.message || 'Failed to initialize checkout');
     } finally {
       setLoading(false);
     }
@@ -280,26 +299,27 @@ export const CartProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      const response = await api.post('/checkout/confirm', {
-        orderId,
-        paymentDetails
+      const response = await makeAuthenticatedRequest('/checkout/confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderId,
+          paymentDetails
+        })
       });
 
       // Clear cart after successful order
-      if (response.data.success) {
+      if (response.success) {
         setCart([]);
       }
 
       return {
-        success: response.data.success,
-        order: response.data.order,
-        message: response.data.message
+        success: response.success,
+        order: response.order,
+        message: response.message
       };
     } catch (error) {
       console.error('Failed to confirm order:', error);
-      throw new Error(
-        error.response?.data?.message || 'Failed to confirm order'
-      );
+      throw new Error(error.message || 'Failed to confirm order');
     } finally {
       setLoading(false);
     }
@@ -310,25 +330,30 @@ export const CartProvider = ({ children }) => {
     if (cart.length === 0) return { valid: true, items: [] };
 
     try {
-      const phoneIds = cart.map(item => item.id);
-      const response = await api.post('/phones/validate', { phoneIds });
+      const phoneIds = cart.map(item => item._id || item.id);
+      const response = await makeAuthenticatedRequest('/phones/validate', {
+        method: 'POST',
+        body: JSON.stringify({ phoneIds })
+      });
       
-      const validatedItems = response.data.phones || [];
+      const validatedItems = response.phones || [];
       const updatedCart = [];
       const issues = [];
 
       cart.forEach(cartItem => {
-        const validatedItem = validatedItems.find(item => item.id === cartItem.id);
+        const validatedItem = validatedItems.find(item => 
+          item._id === (cartItem._id || cartItem.id)
+        );
         
         if (!validatedItem) {
           issues.push({
-            phoneId: cartItem.id,
+            phoneId: cartItem._id || cartItem.id,
             title: cartItem.title,
             issue: 'Phone no longer available'
           });
         } else if (validatedItem.price !== cartItem.price) {
           issues.push({
-            phoneId: cartItem.id,
+            phoneId: cartItem._id || cartItem.id,
             title: cartItem.title,
             issue: `Price changed from $${cartItem.price} to $${validatedItem.price}`
           });

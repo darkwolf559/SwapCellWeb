@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { User, ShoppingCart, Plus, Edit, Star, Eye, TrendingUp, DollarSign, Smartphone, Loader, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, ShoppingCart, Plus, Edit, Star, Eye, TrendingUp, DollarSign, Smartphone, Loader, AlertCircle, Camera, Upload, X, Check } from 'lucide-react';
 import PhoneCard from '../components/PhoneCard';
 import { useAuth } from '../utils/AuthContext';
-import { phoneAPI, authAPI, orderAPI, analyticsAPI } from '../utils/api';
+import { phoneAPI, authAPI, orderAPI, analyticsAPI, apiUtils } from '../utils/api';
 
 const ProfilePage = ({ onNavigate }) => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -20,6 +20,11 @@ const ProfilePage = ({ onNavigate }) => {
   const [listings, setListings] = useState([]);
   const [orders, setOrders] = useState([]);
   const [profileData, setProfileData] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!user) {
@@ -90,7 +95,7 @@ const ProfilePage = ({ onNavigate }) => {
 
     } catch (err) {
       console.error('Failed to fetch profile data:', err);
-      setError(err.response?.data?.message || 'Failed to load profile data');
+      setError(apiUtils.handleError(err));
     } finally {
       setLoading(false);
     }
@@ -98,6 +103,80 @@ const ProfilePage = ({ onNavigate }) => {
 
   const handlePhoneSelect = (phone) => {
     onNavigate('details');
+  };
+
+  const handleProfilePhotoClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handlePhotoUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      // Validate file
+      apiUtils.validateProfilePicture(file);
+      
+      setError(null);
+
+      // Create preview and show dialog
+      const preview = await apiUtils.createImagePreview(file);
+      setPhotoPreview(preview);
+      setSelectedFile(file);
+      setShowPreviewDialog(true);
+      
+    } catch (err) {
+      console.error('Failed to process image:', err);
+      setError(apiUtils.handleError(err));
+    } finally {
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleConfirmUpload = async () => {
+    if (!selectedFile) return;
+
+    try {
+      setUploadingPhoto(true);
+      setError(null);
+
+      // Upload photo using uploadAPI
+      const response = await authAPI.updateProfileWithPhoto(apiUtils.formatProfileData({}, selectedFile));
+      
+      // Update local profile data
+      setProfileData(response.data.user);
+      
+      // Update auth context if available
+      if (updateUser) {
+        updateUser(response.data.user);
+      }
+      
+      console.log('Profile photo updated successfully');
+      
+      // Close dialog and clear states
+      setShowPreviewDialog(false);
+      setPhotoPreview(null);
+      setSelectedFile(null);
+      
+    } catch (err) {
+      console.error('Failed to upload profile photo:', err);
+      setError(apiUtils.handleError(err));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleCancelUpload = () => {
+    setShowPreviewDialog(false);
+    setPhotoPreview(null);
+    setSelectedFile(null);
+  };
+
+  const clearError = () => {
+    setError(null);
   };
 
   if (!user) {
@@ -126,6 +205,112 @@ const ProfilePage = ({ onNavigate }) => {
     </button>
   );
 
+  const PreviewDialog = () => (
+    showPreviewDialog && (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+        <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl border border-gray-700/50 animate-scale-in">
+          <h3 className="text-2xl font-bold text-white mb-6 text-center bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+            Update Profile Picture
+          </h3>
+          
+          <div className="flex justify-center mb-6">
+            <div className="relative">
+              <div className="w-32 h-32 rounded-full overflow-hidden shadow-2xl border-4 border-gradient-to-br from-cyan-400 to-purple-500">
+                <img
+                  src={photoPreview}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-full" />
+            </div>
+          </div>
+          
+          <p className="text-gray-400 text-center mb-8">
+            Do you want to update your profile picture with this image?
+          </p>
+          
+          <div className="flex gap-4">
+            <button
+              onClick={handleCancelUpload}
+              disabled={uploadingPhoto}
+              className="flex-1 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 text-white py-3 px-6 rounded-2xl font-medium transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              <X className="h-5 w-5 mr-2" />
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmUpload}
+              disabled={uploadingPhoto}
+              className="flex-1 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white py-3 px-6 rounded-2xl font-medium transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg shadow-purple-500/25"
+            >
+              {uploadingPhoto ? (
+                <>
+                  <Loader className="h-5 w-5 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Check className="h-5 w-5 mr-2" />
+                  Update
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  );
+
+  const ProfilePicture = () => (
+    <div className="relative group cursor-pointer" onClick={handleProfilePhotoClick}>
+      <div className="relative">
+        {profileData?.profilePicture ? (
+          // Show current profile picture
+          <div className="w-24 h-24 rounded-full overflow-hidden shadow-2xl shadow-purple-500/50 animate-pulse-glow border-4 border-gradient-to-br from-cyan-400 to-purple-500">
+            <img
+              src={profileData.profilePicture}
+              alt="Profile"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            <div className="w-24 h-24 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-full flex items-center justify-center shadow-2xl shadow-purple-500/50 animate-pulse-glow" style={{ display: 'none' }}>
+              <User className="h-12 w-12 text-white" />
+            </div>
+          </div>
+        ) : (
+          // Show default avatar
+          <div className="w-24 h-24 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-full flex items-center justify-center shadow-2xl shadow-purple-500/50 animate-pulse-glow">
+            <User className="h-12 w-12 text-white" />
+          </div>
+        )}
+        
+        {/* Upload overlay */}
+        <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+          <Camera className="h-6 w-6 text-white" />
+        </div>
+        
+        {/* Upload button */}
+        <div className="absolute -bottom-2 -right-2 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-full p-2 shadow-lg transform group-hover:scale-110 transition-transform duration-300">
+          <Upload className="h-4 w-4 text-white" />
+        </div>
+      </div>
+      
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handlePhotoUpload}
+        className="hidden"
+        disabled={uploadingPhoto}
+      />
+    </div>
+  );
+
   const OverviewTab = () => (
     <div className="space-y-8 animate-slide-up">
       {/* Profile Header */}
@@ -138,9 +323,8 @@ const ProfilePage = ({ onNavigate }) => {
         </div>
         
         <div className="relative z-10 flex items-center">
-          <div className="w-24 h-24 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-full flex items-center justify-center shadow-2xl shadow-purple-500/50 animate-pulse-glow">
-            <User className="h-12 w-12 text-white" />
-          </div>
+          <ProfilePicture />
+          
           <div className="ml-8">
             <div className="overflow-visible">
               <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-pink-400 bg-clip-text text-transparent animate-shimmer leading-normal">
@@ -170,7 +354,7 @@ const ProfilePage = ({ onNavigate }) => {
             { icon: TrendingUp, value: stats.activeListings, label: 'Active Listings', gradient: 'from-green-400 to-emerald-600', delay: '0s' },
             { icon: ShoppingCart, value: stats.totalSold, label: 'Total Sold', gradient: 'from-blue-400 to-cyan-600', delay: '0.2s' },
             { icon: DollarSign, value: `LKR ${stats.totalRevenue.toLocaleString()}`, label: 'Total Revenue', gradient: 'from-purple-400 to-pink-600', delay: '0.4s' },
-            { icon: Eye, value: stats.totalViews.toLocaleString(), label: 'Total Views', gradient: 'from-yellow-400 to-orange-600', delay: '0.6s' }
+
           ].map((stat, index) => (
             <div key={index} className="group relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 text-center shadow-2xl border border-gray-700/50 hover:border-gray-600/50 transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 animate-slide-up" 
                  style={{ animationDelay: stat.delay }}>
@@ -360,21 +544,32 @@ const ProfilePage = ({ onNavigate }) => {
       </div>
       
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Preview Dialog */}
+        <PreviewDialog />
+
         {/* Error State */}
         {error && (
           <div className="mb-8 bg-red-900/20 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
             <div className="flex items-center">
               <AlertCircle className="h-6 w-6 text-red-400 mr-3" />
-              <div>
+              <div className="flex-1">
                 <h3 className="text-red-300 font-semibold">Failed to load profile data</h3>
                 <p className="text-red-400 text-sm">{error}</p>
               </div>
-              <button
-                onClick={fetchProfileData}
-                className="ml-auto bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                Retry
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={fetchProfileData}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={clearError}
+                  className="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded-lg transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -447,6 +642,22 @@ const ProfilePage = ({ onNavigate }) => {
           to { transform: rotate(360deg); }
         }
         
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes scale-in {
+          from { 
+            opacity: 0;
+            transform: scale(0.9);
+          }
+          to { 
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
         .animate-float {
           animation: float 6s ease-in-out infinite;
         }
@@ -479,6 +690,14 @@ const ProfilePage = ({ onNavigate }) => {
         
         .animate-spin-slow {
           animation: spin-slow 3s linear infinite;
+        }
+        
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out;
+        }
+        
+        .animate-scale-in {
+          animation: scale-in 0.3s ease-out;
         }
       `}</style>
     </div>

@@ -45,14 +45,34 @@ export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
   register: (userData) => api.post('/auth/register', userData),
   getProfile: () => api.get('/users/profile'),
-  updateProfile: (userData) => api.put('/users/profile', userData),
+  updateProfile: (userData) => {
+    // Check if userData is FormData (contains file)
+    if (userData instanceof FormData) {
+      return api.put('/users/profile', userData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+    }
+    // Regular JSON update
+    return api.put('/users/profile', userData);
+  },
+  updateProfileWithPhoto: (formData) => api.put('/users/profile', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
 };
 
 // Phone API
 export const phoneAPI = {
   getPhones: (params = {}) => api.get('/phones', { params }),
   getPhone: (id) => api.get(`/phones/${id}`),
-  createPhone: (phoneData) => api.post('/phones', phoneData),
+  createPhone: (phoneData) => api.post('/phones', phoneData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
   updatePhone: (id, phoneData) => api.put(`/phones/${id}`, phoneData),
   deletePhone: (id) => api.delete(`/phones/${id}`),
   getMyListings: () => api.get('/users/my-listings'),
@@ -111,6 +131,23 @@ export const uploadAPI = {
       },
     });
   },
+  uploadProfilePicture: async (file, additionalData = {}) => {
+    const formData = new FormData();
+    formData.append('profilePicture', file);
+    
+    // Add any additional profile data
+    Object.keys(additionalData).forEach(key => {
+      if (additionalData[key] !== undefined && additionalData[key] !== null) {
+        formData.append(key, additionalData[key]);
+      }
+    });
+    
+    return api.put('/users/profile', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
 };
 
 // Utility functions
@@ -149,6 +186,17 @@ export const apiUtils = {
     };
   },
 
+  // Format profile data for API with optional photo
+  formatProfileData: (profileData, profilePicture = null) => {
+    const formData = new FormData();
+    
+    if (profileData.name) formData.append('name', profileData.name.trim());
+    if (profileData.phone) formData.append('phone', profileData.phone.trim());
+    if (profilePicture) formData.append('profilePicture', profilePicture);
+    
+    return formData;
+  },
+
   // Validate phone data
   validatePhoneData: (phoneData) => {
     const required = ['title', 'brand', 'price', 'condition'];
@@ -167,6 +215,52 @@ export const apiUtils = {
     }
 
     return true;
+  },
+
+  // Validate profile picture
+  validateProfilePicture: (file) => {
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    
+    if (file.size > maxSize) {
+      throw new Error('Profile picture must be less than 5MB');
+    }
+    
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Profile picture must be a JPEG, PNG, or WebP image');
+    }
+    
+    return true;
+  },
+
+  // Create image preview URL
+  createImagePreview: (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+  },
+
+  // Compress image before upload (optional)
+  compressImage: (file, maxWidth = 800, quality = 0.8) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        const ratio = Math.min(maxWidth / img.width, maxWidth / img.height);
+        canvas.width = img.width * ratio;
+        canvas.height = img.height * ratio;
+        
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob(resolve, 'image/jpeg', quality);
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
   }
 };
 

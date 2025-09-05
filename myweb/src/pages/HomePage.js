@@ -131,7 +131,7 @@ const HomePage = ({ onNavigate, onPhoneSelect }) => {
 
       {/* Hero Section */}
       <div className="relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-12">
           <div className="text-center">
             {/* Animated Title */}
             <div className="relative mb-8">
@@ -153,7 +153,7 @@ const HomePage = ({ onNavigate, onPhoneSelect }) => {
             </p>
 
             {/* Animated Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-2">
               {[
                 { value: `${featuredPhones.length}+`, label: "Verified Phones", color: "from-cyan-400 to-blue-500", icon: Smartphone },
                 { value: "98%", label: "Customer Satisfaction", color: "from-purple-400 to-pink-500", icon: Star },
@@ -183,7 +183,7 @@ const HomePage = ({ onNavigate, onPhoneSelect }) => {
       </div>
 
       {/* Featured Phones Section */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-4">
         <div className="text-center mb-12">
           <h2 className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 mb-4 animate-subtle-glow">
             Featured Phones
