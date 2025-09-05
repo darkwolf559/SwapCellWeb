@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, MessageCircle, Shield, Lock, User, Star, Award, Globe } from 'lucide-react';
+import { Phone, MessageCircle, Shield, Lock, User, Globe } from 'lucide-react';
 
 const SellerCard = ({ seller }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -14,7 +14,11 @@ const SellerCard = ({ seller }) => {
   };
 
   return (
-    <div className="relative group" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div
+      className="relative group"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       {/* Glow */}
       <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/20 via-blue-600/20 to-purple-600/20 rounded-2xl blur-xl transition-all duration-500 group-hover:blur-2xl"></div>
 
@@ -25,9 +29,13 @@ const SellerCard = ({ seller }) => {
             <div className="p-3 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-xl animate-pulse">
               <Shield className="h-6 w-6 text-white" />
             </div>
-            {isHovered && <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-blue-400 rounded-xl animate-ping opacity-75"></div>}
+            {isHovered && (
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-blue-400 rounded-xl animate-ping opacity-75"></div>
+            )}
           </div>
-          <h3 className="ml-4 font-bold text-2xl bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">Verified Seller</h3>
+          <h3 className="ml-4 font-bold text-2xl bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
+            Verified Seller
+          </h3>
           <div className="ml-auto">
             <Lock className="h-5 w-5 text-green-500 animate-pulse" />
           </div>
@@ -47,44 +55,24 @@ const SellerCard = ({ seller }) => {
             </div>
 
             <div className="ml-6">
-              <h4 className="font-bold text-xl text-gray-900 mb-2">{seller.name}</h4>
-              <div className="flex items-center mb-2">
-                <Star className="h-5 w-5 text-yellow-400 fill-current animate-pulse" />
-                <span className="ml-2 text-sm text-gray-700 font-semibold">{seller.rating}</span>
-                <span className="text-sm text-gray-500 ml-1">seller rating</span>
-              </div>
-              <div className="flex items-center">
-                <Award className="h-5 w-5 text-emerald-500 animate-bounce" />
-                <span className="ml-2 text-sm text-gray-600">Verified since 2023</span>
-              </div>
+              <h4 className="font-bold text-xl text-gray-900">{seller.name}</h4>
             </div>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          {[
-            { label: 'Items Sold', value: '24', color: 'from-blue-500 to-cyan-500' },
-            { label: 'Response Rate', value: '95%', color: 'from-purple-500 to-pink-500' },
-            { label: 'Avg Response', value: '2h', color: 'from-emerald-500 to-teal-500' }
-          ].map((stat, index) => (
-            <div key={stat.label} className="relative group cursor-pointer" style={{ animationDelay: `${index * 200}ms` }}>
-              <div className={`absolute inset-0 bg-gradient-to-r ${stat.color} opacity-0 group-hover:opacity-20 rounded-xl blur transition-all duration-300`}></div>
-              <div className="relative text-center p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl shadow-md group-hover:shadow-xl transition-all duration-300 border border-gray-100">
-                <div className={`text-2xl font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>{stat.value}</div>
-                <div className="text-xs text-gray-600 font-medium uppercase tracking-wide">{stat.label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
         {/* Contact Buttons */}
         <div className="grid grid-cols-2 gap-4 mb-8">
-          <button onClick={handleCall} className="group relative bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-6 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:scale-105 overflow-hidden">
+          <button
+            onClick={handleCall}
+            className="group relative bg-gradient-to-r from-blue-500 to-blue-600 text-white py-4 px-6 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:scale-105 overflow-hidden"
+          >
             <Phone className="h-5 w-5 mr-2 group-hover:animate-bounce" />
             Call Seller
           </button>
-          <button onClick={handleWhatsApp} className="group relative bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 px-6 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:scale-105 overflow-hidden">
+          <button
+            onClick={handleWhatsApp}
+            className="group relative bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 px-6 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:scale-105 overflow-hidden"
+          >
             <MessageCircle className="h-5 w-5 mr-2 group-hover:animate-pulse" />
             WhatsApp
           </button>

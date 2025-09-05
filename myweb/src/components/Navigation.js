@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Smartphone, Menu } from 'lucide-react';
+import { ShoppingCart, Smartphone, Menu, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../utils/AuthContext';
 import { useCart } from '../utils/CartContext';
 
-const Navigation = ({ currentPage, onNavigate }) => {
+const Navigation = ({ currentPage, onNavigate, showBackButton = false, onBack }) => {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { user, logout } = useAuth();
@@ -65,6 +65,25 @@ const Navigation = ({ currentPage, onNavigate }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center">
+            {/* Back Button */}
+            {showBackButton && (
+              <button
+                onClick={onBack}
+                className="relative mr-4 p-2 text-gray-300 hover:text-cyan-400 transition-all duration-300 transform hover:scale-110 hover:-translate-x-1 group rounded-lg"
+              >
+                <div className="relative">
+                  <ArrowLeft className="h-6 w-6 transition-all duration-300 group-hover:-translate-x-1" />
+                  {/* Back button glow effect */}
+                  <div className="absolute inset-0 h-6 w-6 text-cyan-400 blur-sm opacity-0 group-hover:opacity-50 transition-opacity duration-300">
+                    <ArrowLeft className="h-6 w-6" />
+                  </div>
+                </div>
+                
+                {/* Hover background */}
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-400/10 to-purple-400/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg"></div>
+              </button>
+            )}
+
             <div 
               className="flex-shrink-0 flex items-center cursor-pointer group transition-all duration-300 hover:scale-110" 
               onClick={() => onNavigate('home')}
@@ -162,6 +181,22 @@ const Navigation = ({ currentPage, onNavigate }) => {
           }
         `}>
           <div className="space-y-2">
+            {/* Mobile Back Button */}
+            {showBackButton && (
+              <button
+                onClick={() => {
+                  onBack();
+                  setShowMobileMenu(false);
+                }}
+                className="block w-full text-left px-4 py-2 text-gray-300 hover:text-cyan-400 transition-all duration-300 rounded-lg group"
+              >
+                <div className="flex items-center space-x-2">
+                  <ArrowLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" />
+                  <span>Back</span>
+                </div>
+              </button>
+            )}
+            
             <NavLink page="home" className="block w-full text-left">
               <span className="block py-1">Home</span>
             </NavLink>

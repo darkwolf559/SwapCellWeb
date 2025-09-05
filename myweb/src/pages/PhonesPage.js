@@ -1,15 +1,17 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Filter, Smartphone, Search, Zap, Grid, List, Star, TrendingUp } from 'lucide-react';
+import { Filter, Smartphone, Search, Zap, Grid, List, Star, TrendingUp, Plus, User } from 'lucide-react';
 import PhoneCard from '../components/PhoneCard';
 import FilterSidebar from '../components/FilterSidebar';
-import { mockPhones } from '../utils/mockData';
+import { phoneAPI } from '../utils/api';
+import { useAuth } from '../utils/AuthContext';
 
 const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
+  const { user } = useAuth();
   const [filters, setFilters] = useState({
     brand: 'all',
     condition: 'all',
     minPrice: 0,
-    maxPrice: 2000,
+    maxPrice: 1000000,
     sortBy: 'featured'
   });
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,6 +20,25 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [scrollY, setScrollY] = useState(0);
+  
+  // API State
+  const [phones, setPhones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    hasNext: false,
+    hasPrev: false
+  });
+  const [stats, setStats] = useState({
+    total: 0,
+    avgRating: '4.7',
+    bestDeal: 0,
+    trending: 'iPhone 14'
+  });
+
   const containerRef = useRef(null);
 
   // Handle mouse movement for parallax effects
@@ -42,35 +63,79 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
     };
   }, []);
 
-  const filteredPhones = useMemo(() => {
-    let filtered = mockPhones.filter(phone => {
-      const matchesSearch = phone.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           phone.brand.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesBrand = filters.brand === 'all' || phone.brand.toLowerCase() === filters.brand.toLowerCase();
-      const matchesCondition = filters.condition === 'all' || phone.condition === filters.condition;
-      const matchesPrice = phone.price >= filters.minPrice && phone.price <= filters.maxPrice;
+  // Fetch phones from API
+  const fetchPhones = async (page = 1) => {
+    try {
+      setLoading(true);
+      setError(null);
 
-      return matchesSearch && matchesBrand && matchesCondition && matchesPrice;
-    });
+      const params = {
+        page,
+        limit: 12,
+        search: searchQuery || undefined,
+        brand: filters.brand !== 'all' ? filters.brand : undefined,
+        condition: filters.condition !== 'all' ? filters.condition : undefined,
+        minPrice: filters.minPrice > 0 ? filters.minPrice : undefined,
+        maxPrice: filters.maxPrice < 1000000 ? filters.maxPrice : undefined,
+        sort: filters.sortBy
+      };
 
-    // Apply sorting
-    switch (filters.sortBy) {
-      case 'price_low':
-        return filtered.sort((a, b) => a.price - b.price);
-      case 'price_high':
-        return filtered.sort((a, b) => b.price - a.price);
-      case 'newest':
-        return filtered.sort((a, b) => new Date(b.createdAt || Date.now()) - new Date(a.createdAt || Date.now()));
-      case 'rating':
-        return filtered.sort((a, b) => b.rating - a.rating);
-      default:
-        return filtered;
+      // Remove undefined values
+      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+
+      const response = await phoneAPI.getPhones(params);
+      const { phones: fetchedPhones, pagination: paginationData } = response.data;
+
+      setPhones(fetchedPhones);
+      setPagination(paginationData);
+      
+      // Update stats
+      if (fetchedPhones.length > 0) {
+        const prices = fetchedPhones.map(p => p.price);
+        const minPrice = Math.min(...prices);
+        setStats(prev => ({
+          ...prev,
+          total: paginationData.totalItems,
+          bestDeal: minPrice
+        }));
+      }
+
+    } catch (err) {
+      console.error('Failed to fetch phones:', err);
+      setError(err.response?.data?.message || 'Failed to load phones');
+      setPhones([]);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Fetch phones when filters or search changes
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      fetchPhones(1);
+    }, 500); // Debounce search
+
+    return () => clearTimeout(debounceTimer);
   }, [searchQuery, filters]);
 
-  const handlePhoneSelect = (phone) => {
-    onPhoneSelect(phone);
-    onNavigate('details');
+  const handlePhoneSelect = async (phone) => {
+    try {
+      // Fetch full phone details
+      const response = await phoneAPI.getPhone(phone._id);
+      onPhoneSelect(response.data);
+      onNavigate('details');
+    } catch (err) {
+      console.error('Failed to fetch phone details:', err);
+      // Still navigate with basic data
+      onPhoneSelect(phone);
+      onNavigate('details');
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (pagination.hasNext) {
+      fetchPhones(pagination.currentPage + 1);
+    }
   };
 
   return (
@@ -135,19 +200,53 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
           />
           
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-            {/* Animated Title */}
-            <div className="text-center mb-12">
-              <h1 className="text-6xl md:text-8xl font-black bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent animate-glow mb-4">
-                PHONES
-              </h1>
-              <div className="flex items-center justify-center space-x-4 mb-8">
-                <div className="h-1 w-20 bg-gradient-to-r from-transparent to-cyan-400 animate-pulse" />
-                <Zap className="h-8 w-8 text-yellow-400 animate-bounce" />
-                <div className="h-1 w-20 bg-gradient-to-l from-transparent to-purple-400 animate-pulse" />
+            {/* Header with Right-Side Add Phone Button */}
+            <div className="flex items-center justify-between mb-8">
+              {/* Left spacer for balance */}
+              <div className="w-48 hidden lg:block"></div>
+              
+              {/* Centered Content */}
+              <div className="text-center flex-1 ">
+                <h1 className=" mt-6 text-6xl md:text-8xl font-black bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent animate-glow mb-4">
+                  PHONES
+                </h1>
+                <div className="flex items-center justify-center space-x-4 mb-6">
+                  <div className="h-1 w-20 bg-gradient-to-r from-transparent to-cyan-400 animate-pulse" />
+                  <Zap className="h-8 w-8 text-yellow-400 animate-bounce" />
+                  <div className="h-1 w-20 bg-gradient-to-l from-transparent to-purple-400 animate-pulse" />
+                </div>
+                <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
+                  Discover the future of mobile technology with our premium collection of pre-owned smartphones
+                </p>
               </div>
-              <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
-                Discover the future of mobile technology with our premium collection of pre-owned smartphones
-              </p>
+
+              {/* Right Side - Add New Phone Button */}
+              <div className="w-48 flex justify-end">
+                {user && user.role === 'seller' && (
+                  <button
+                    onClick={() => onNavigate('add-phone')}
+                    className="group relative bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-400 hover:via-emerald-400 hover:to-teal-400 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-500 flex items-center shadow-2xl shadow-green-500/25 transform hover:scale-105 hover:-translate-y-1 overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                    <Plus className="h-5 w-5 mr-2 relative z-10 group-hover:rotate-90 transition-transform duration-300" />
+                    <span className="relative z-10 whitespace-nowrap">Add New Phone</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Mobile Layout - Centered button below content */}
+            <div className="lg:hidden text-center mb-8">
+              {user && user.role === 'seller' && (
+                <button
+                  onClick={() => onNavigate('add-phone')}
+                  className="group relative bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-400 hover:via-emerald-400 hover:to-teal-400 text-white px-8 py-3 rounded-2xl font-semibold transition-all duration-500 inline-flex items-center shadow-2xl shadow-green-500/25 transform hover:scale-105 hover:-translate-y-1 overflow-hidden whitespace-nowrap"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                  <Plus className="h-5 w-5 mr-2 relative z-10 group-hover:rotate-90 transition-transform duration-300" />
+                  <span className="relative z-10">Add New Phone</span>
+                </button>
+              )}
             </div>
 
             {/* Advanced Search Bar */}
@@ -170,10 +269,11 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
                     onFocus={() => setIsSearchFocused(true)}
                     onBlur={() => setIsSearchFocused(false)}
                     className="flex-1 bg-transparent text-white placeholder-gray-400 text-lg focus:outline-none"
+                    disabled={loading}
                   />
                   {searchQuery && (
                     <div className="ml-4 px-4 py-2 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl text-white text-sm font-semibold animate-pulse">
-                      {filteredPhones.length} found
+                      {phones.length} found
                     </div>
                   )}
                 </div>
@@ -238,8 +338,10 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
                       Available Phones
                     </h2>
                     <div className="flex items-center space-x-2 bg-gray-800/50 backdrop-blur-lg px-4 py-2 rounded-2xl border border-gray-700/50">
-                      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse" />
-                      <span className="text-green-400 font-semibold text-lg">{filteredPhones.length}</span>
+                      <div className={`w-3 h-3 rounded-full animate-pulse ${loading ? 'bg-yellow-400' : 'bg-green-400'}`} />
+                      <span className={`font-semibold text-lg ${loading ? 'text-yellow-400' : 'text-green-400'}`}>
+                        {loading ? '...' : pagination.totalItems}
+                      </span>
                       <span className="text-gray-400">found</span>
                     </div>
                   </div>
@@ -273,15 +375,16 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
                     <select 
                       value={filters.sortBy}
                       onChange={(e) => setFilters(prev => ({ ...prev, sortBy: e.target.value }))}
+                      disabled={loading}
                       className="bg-gray-800/50 backdrop-blur-lg border border-gray-700/50 rounded-2xl px-4 py-3 text-white 
                                focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 transition-all duration-300 
-                               hover:bg-gray-700/50 cursor-pointer"
+                               hover:bg-gray-700/50 cursor-pointer disabled:opacity-50"
                     >
-                      <option value="featured">✨ Featured</option>
-                      <option value="price_low">💰 Price: Low to High</option>
-                      <option value="price_high">💎 Price: High to Low</option>
-                      <option value="newest">🆕 Newest First</option>
-                      <option value="rating">⭐ Highest Rated</option>
+  <option className="bg-purple-800 text-white" value="featured">✨ Featured</option>
+  <option className="bg-pink-700 text-white" value="price_low">💰 Price: Low to High</option>
+  <option className="bg-purple-700 text-white" value="price_high">💎 Price: High to Low</option>
+  <option className="bg-pink-600 text-white" value="newest">🆕 Newest First</option>
+  <option className="bg-purple-600 text-white" value="rating">⭐ Highest Rated</option>
                     </select>
                   </div>
                 </div>
@@ -289,10 +392,10 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
                 {/* Stats Bar */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                   {[
-                    { label: 'Total Phones', value: mockPhones.length, icon: Smartphone, color: 'from-blue-500 to-cyan-500' },
-                    { label: 'Avg Rating', value: '4.7', icon: Star, color: 'from-yellow-500 to-orange-500' },
-                    { label: 'Best Deal', value: `$${Math.min(...mockPhones.map(p => p.price))}`, icon: Zap, color: 'from-green-500 to-teal-500' },
-                    { label: 'Trending', value: 'iPhone 14', icon: TrendingUp, color: 'from-purple-500 to-pink-500' }
+                    { label: 'Total Phones', value: stats.total, icon: Smartphone, color: 'from-blue-500 to-cyan-500' },
+                    { label: 'Avg Rating', value: stats.avgRating, icon: Star, color: 'from-yellow-500 to-orange-500' },
+                    { label: 'Best Deal', value: `LKR ${stats.bestDeal}`, icon: Zap, color: 'from-green-500 to-teal-500' },
+                    { label: 'Trending', value: stats.trending, icon: TrendingUp, color: 'from-purple-500 to-pink-500' }
                   ].map((stat, i) => (
                     <div key={stat.label} className="bg-gray-800/30 backdrop-blur-lg rounded-2xl p-4 border border-gray-700/30 hover:border-gray-600/50 transition-all duration-300 group">
                       <div className="flex items-center justify-between">
@@ -308,12 +411,38 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
                   ))}
                 </div>
 
+                {/* Loading State */}
+                {loading && (
+                  <div className="text-center py-20">
+                    <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500/20 border-t-purple-500 mx-auto mb-4"></div>
+                    <p className="text-gray-400 text-xl">Loading amazing phones...</p>
+                  </div>
+                )}
+
+                {/* Error State */}
+                {error && (
+                  <div className="text-center py-20 bg-red-900/20 backdrop-blur-lg rounded-3xl border border-red-500/30">
+                    <Smartphone className="h-24 w-24 text-red-400 mx-auto mb-6" />
+                    <h3 className="text-2xl font-bold text-red-300 mb-4">Failed to Load Phones</h3>
+                    <p className="text-red-400 mb-8">{error}</p>
+                    <button
+                      onClick={() => fetchPhones(1)}
+                      className="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 
+                               text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 
+                               transform hover:scale-105 hover:shadow-lg hover:shadow-red-500/25"
+                    >
+                      <Zap className="inline h-5 w-5 mr-2" />
+                      Try Again
+                    </button>
+                  </div>
+                )}
+
                 {/* Phone Grid */}
-                {filteredPhones.length > 0 ? (
+                {!loading && !error && phones.length > 0 && (
                   <div className={`grid gap-8 ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
-                    {filteredPhones.map((phone, index) => (
+                    {phones.map((phone, index) => (
                       <div 
-                        key={phone.id} 
+                        key={phone._id} 
                         className="animate-fade-in-up"
                         style={{ 
                           animationDelay: `${index * 0.1}s`,
@@ -328,7 +457,10 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
                       </div>
                     ))}
                   </div>
-                ) : (
+                )}
+
+                {/* No Results */}
+                {!loading && !error && phones.length === 0 && (
                   <div className="text-center py-20 bg-gray-800/20 backdrop-blur-lg rounded-3xl border border-gray-700/30">
                     <div className="relative">
                       {/* Animated background effect */}
@@ -364,15 +496,18 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
                 )}
 
                 {/* Load More Button */}
-                {filteredPhones.length > 0 && filteredPhones.length >= 9 && (
+                {!loading && phones.length > 0 && pagination.hasNext && (
                   <div className="text-center mt-16">
-                    <button className="group relative bg-gray-800/50 hover:bg-gradient-to-r hover:from-cyan-500 hover:to-purple-500 
-                                     text-gray-300 hover:text-white px-12 py-4 rounded-2xl font-semibold transition-all duration-500 
-                                     transform hover:scale-105 hover:shadow-2xl border border-gray-700/50 hover:border-transparent backdrop-blur-lg">
+                    <button 
+                      onClick={handleLoadMore}
+                      className="group relative bg-gray-800/50 hover:bg-gradient-to-r hover:from-cyan-500 hover:to-purple-500 
+                               text-gray-300 hover:text-white px-12 py-4 rounded-2xl font-semibold transition-all duration-500 
+                               transform hover:scale-105 hover:shadow-2xl border border-gray-700/50 hover:border-transparent backdrop-blur-lg"
+                    >
                       <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-2xl blur-lg opacity-0 group-hover:opacity-50 transition-opacity duration-500" />
                       <span className="relative flex items-center">
                         <TrendingUp className="h-5 w-5 mr-3 group-hover:animate-bounce" />
-                        Load More Phones
+                        Load More Phones ({pagination.totalPages - pagination.currentPage} pages left)
                       </span>
                     </button>
                   </div>

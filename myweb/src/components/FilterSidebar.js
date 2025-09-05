@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
 import { Filter, RotateCcw, DollarSign, Sparkles, ChevronDown, ChevronRight, Zap, Smartphone } from 'lucide-react';
 
-const FilterSidebar = ({ filters, onFiltersChange }) => {
+const FilterSidebar = ({ filters = {}, onFiltersChange }) => {
+  // Fallback default filters
+  const defaultFilters = {
+    brand: 'all',
+    minPrice: 0,
+    maxPrice: 1000000,
+    sortBy: 'featured',
+  };
+
+  // Merge defaults with passed filters
+  const currentFilters = { ...defaultFilters, ...filters };
+
   const [expandedSections, setExpandedSections] = useState({
     brand: true,
     price: true,
@@ -26,12 +37,7 @@ const FilterSidebar = ({ filters, onFiltersChange }) => {
   };
 
   const resetFilters = () => {
-    onFiltersChange({
-      brand: 'all',
-      minPrice: 0,
-      maxPrice: 2000,
-      sortBy: 'featured'
-    });
+    onFiltersChange(defaultFilters);
   };
 
   const toggleSection = (section) => {
@@ -43,8 +49,8 @@ const FilterSidebar = ({ filters, onFiltersChange }) => {
 
   const getActiveFiltersCount = () => {
     let count = 0;
-    if (filters.brand !== 'all') count++;
-    if (filters.minPrice > 0 || filters.maxPrice < 2000) count++;
+    if (currentFilters.brand !== 'all') count++;
+    if (currentFilters.minPrice > 0 || currentFilters.maxPrice < 1000000) count++;
     return count;
   };
 
@@ -94,7 +100,7 @@ const FilterSidebar = ({ filters, onFiltersChange }) => {
                   <label
                     key={brand.name}
                     className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg transition 
-                      ${filters.brand === brand.name.toLowerCase() || (brand.name === 'All' && filters.brand === 'all')
+                      ${currentFilters.brand === brand.name.toLowerCase() || (brand.name === 'All' && currentFilters.brand === 'all')
                         ? 'bg-gradient-to-r from-cyan-600/40 to-purple-600/40 border border-cyan-500/40 shadow-md'
                         : 'hover:bg-gray-700/50 border border-transparent'}`}
                   >
@@ -102,7 +108,7 @@ const FilterSidebar = ({ filters, onFiltersChange }) => {
                       type="radio"
                       name="brand"
                       value={brand.name.toLowerCase()}
-                      checked={filters.brand === brand.name.toLowerCase() || (brand.name === 'All' && filters.brand === 'all')}
+                      checked={currentFilters.brand === brand.name.toLowerCase() || (brand.name === 'All' && currentFilters.brand === 'all')}
                       onChange={(e) => handleFilterChange('brand', e.target.value)}
                       className="hidden"
                     />
@@ -127,22 +133,24 @@ const FilterSidebar = ({ filters, onFiltersChange }) => {
             </button>
             {expandedSections.price && (
               <div className="mt-3 space-y-4">
-                <div className="text-gray-400 text-sm">Selected: ${filters.minPrice} - ${filters.maxPrice}</div>
+                <div className="text-gray-400 text-sm">
+                  Selected: LKR {currentFilters.minPrice.toLocaleString()} - LKR {currentFilters.maxPrice.toLocaleString()}
+                </div>
                 <input
                   type="range"
                   min="0"
-                  max="2000"
-                  step="50"
-                  value={filters.minPrice}
+                  max="1000000"
+                  step="10000"
+                  value={currentFilters.minPrice}
                   onChange={(e) => handleFilterChange('minPrice', parseInt(e.target.value))}
                   className="w-full accent-cyan-500"
                 />
                 <input
                   type="range"
                   min="0"
-                  max="2000"
-                  step="50"
-                  value={filters.maxPrice}
+                  max="1000000"
+                  step="10000"
+                  value={currentFilters.maxPrice}
                   onChange={(e) => handleFilterChange('maxPrice', parseInt(e.target.value))}
                   className="w-full accent-purple-500"
                 />
@@ -164,10 +172,10 @@ const FilterSidebar = ({ filters, onFiltersChange }) => {
             {expandedSections.quickPrice && (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {[
-                  { label: 'Budget', min: 0, max: 300 },
-                  { label: 'Mid-Range', min: 300, max: 600 },
-                  { label: 'Premium', min: 600, max: 900 },
-                  { label: 'Flagship', min: 900, max: 2000 }
+                  { label: 'Budget', min: 0, max: 150000 },
+                  { label: 'Mid-Range', min: 150000, max: 300000 },
+                  { label: 'Premium', min: 300000, max: 450000 },
+                  { label: 'Flagship', min: 450000, max: 1000000 }
                 ].map(range => (
                   <button
                     key={range.label}
@@ -176,7 +184,7 @@ const FilterSidebar = ({ filters, onFiltersChange }) => {
                       handleFilterChange('maxPrice', range.max);
                     }}
                     className={`px-3 py-2 rounded-lg text-sm border transition font-medium
-                      ${filters.minPrice === range.min && filters.maxPrice === range.max
+                      ${currentFilters.minPrice === range.min && currentFilters.maxPrice === range.max
                         ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-md'
                         : 'border-gray-600 text-gray-300 hover:bg-gray-700/50'}`}
                   >

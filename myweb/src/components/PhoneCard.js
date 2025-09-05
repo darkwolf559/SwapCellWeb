@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Star, Heart, MapPin, Clock, Eye, ShoppingCart, Zap, Shield, Cpu } from 'lucide-react';
+import { Heart, MapPin, Clock, Eye, ShoppingCart, Cpu } from 'lucide-react';
 import { useCart } from '../utils/CartContext';
 import { useFavorites } from '../utils/FavoritesContext';
 
@@ -9,6 +9,7 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [glitchEffect, setGlitchEffect] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const cardRef = useRef(null);
 
   useEffect(() => {
@@ -41,15 +42,58 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
 
   const handleToggleFavorite = (e) => {
     e.stopPropagation();
-    toggleFavorite(phone.id);
+    toggleFavorite(phone._id || phone.id);
   };
 
   const handleViewDetails = () => {
     onViewDetails(phone);
   };
 
-  const discountPercentage = Math.round((1 - phone.price / phone.originalPrice) * 100);
-  const isStarred = favorites.includes(phone.id);
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
+  // Get the main image URL - handle both Cloudinary URLs and local paths
+  const getImageUrl = () => {
+    if (!phone.images || phone.images.length === 0) {
+      return '/api/placeholder/400/300'; // Fallback placeholder
+    }
+
+    const mainImage = phone.images[0];
+    
+    // If it's already a full URL (Cloudinary), use it directly
+    if (mainImage.startsWith('http://') || mainImage.startsWith('https://')) {
+      return mainImage;
+    }
+    
+    // If it's a local path, construct the full URL
+    if (mainImage.startsWith('/uploads/')) {
+      return `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${mainImage}`;
+    }
+    
+    // Legacy support for old format
+    return `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/phones/${mainImage}`;
+  };
+
+  const isStarred = favorites.includes(phone._id || phone.id);
+
+  // Format the posted time
+  const formatPostedTime = (dateString) => {
+    if (!dateString) return 'Recently';
+    
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
+      
+      if (diffInHours < 1) return 'Just now';
+      if (diffInHours < 24) return `${diffInHours}h ago`;
+      if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
+      return date.toLocaleDateString();
+    } catch {
+      return 'Recently';
+    }
+  };
 
   return (
     <div 
@@ -91,14 +135,35 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
                        opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
           />
           
-          <img 
-            src={phone.image} 
-            alt={phone.title}
-            className={`w-full h-56 object-cover transition-all duration-700 group-hover:scale-110
-                       ${glitchEffect ? 'filter hue-rotate-90' : ''}`}
-          />
+          {imageError ? (
+            // Fallback placeholder when image fails to load
+            <div className="w-full h-56 bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+              <div className="text-center text-gray-400">
+                <div className="w-16 h-16 bg-gray-600 rounded-lg mb-3 mx-auto flex items-center justify-center">
+                  <Cpu className="h-8 w-8" />
+                </div>
+                <p className="text-sm">Image not available</p>
+              </div>
+            </div>
+          ) : (
+            <img 
+              src={getImageUrl()}
+              alt={phone.title || phone.name || 'Phone'}
+              onError={handleImageError}
+              className={`w-full h-56 object-cover transition-all duration-700 group-hover:scale-110
+                         ${glitchEffect ? 'filter hue-rotate-90' : ''}`}
+              loading="lazy"
+            />
+          )}
           
-          {/* Floating Action Buttons */}
+          {/* Condition Badge */}
+          {phone.condition && (
+            <div className="absolute top-4 left-4 px-3 py-1 bg-green-500/80 backdrop-blur-lg text-white text-xs font-semibold rounded-full border border-green-400/50">
+              {phone.condition}
+            </div>
+          )}
+          
+          {/* Floating Heart Button */}
           <button
             onClick={handleToggleFavorite}
             className={`absolute top-4 right-4 p-3 rounded-2xl backdrop-blur-lg border transition-all duration-300 z-20
@@ -110,33 +175,6 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
           >
             <Heart className={`h-5 w-5 transition-all ${isStarred ? 'fill-current scale-110' : ''}`} />
           </button>
-          
-          {/* Discount Badge */}
-          {phone.originalPrice && (
-            <div className="absolute top-4 left-4 z-20">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-pink-500 rounded-2xl blur-sm opacity-75 animate-pulse" />
-                <div className="relative bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-2xl text-sm font-bold">
-                  <Zap className="inline h-4 w-4 mr-1" />
-                  {discountPercentage}% OFF
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Condition Badge */}
-          <div className="absolute bottom-4 left-4 z-20">
-            <div className={`px-3 py-1 rounded-xl text-xs font-semibold backdrop-blur-lg border
-                           ${phone.condition === 'Excellent' 
-                             ? 'bg-green-500/80 border-green-400 text-white' 
-                             : phone.condition === 'Very Good'
-                             ? 'bg-blue-500/80 border-blue-400 text-white'
-                             : 'bg-yellow-500/80 border-yellow-400 text-white'
-                           }`}>
-              <Shield className="inline h-3 w-3 mr-1" />
-              {phone.condition}
-            </div>
-          </div>
         </div>
         
         {/* Content Section */}
@@ -145,49 +183,77 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
           <h3 className={`font-bold text-xl text-white mb-3 line-clamp-2 transition-all duration-300
                          ${glitchEffect ? 'animate-pulse bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent' : ''}
                          group-hover:bg-gradient-to-r group-hover:from-cyan-400 group-hover:to-purple-400 group-hover:bg-clip-text group-hover:text-transparent`}>
-            {phone.title}
+            {phone.title || phone.name || 'Phone'}
           </h3>
+          
+          {/* Brand */}
+          {phone.brand && (
+            <div className="flex items-center space-x-2">
+              <span className="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs font-medium rounded-lg border border-blue-500/30">
+                {phone.brand}
+              </span>
+            </div>
+          )}
           
           {/* Price Section */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent animate-pulse-glow">
-                ${phone.price}
+                LKR {phone.price?.toLocaleString() || 'N/A'}
               </span>
-              {phone.originalPrice && (
-                <span className="text-lg text-gray-500 line-through">${phone.originalPrice}</span>
+              {phone.originalPrice && phone.originalPrice > phone.price && (
+                <span className="text-lg text-gray-500 line-through">
+                  LKR {phone.originalPrice.toLocaleString()}
+                </span>
               )}
-            </div>
-            
-            {/* Rating */}
-            <div className="flex items-center space-x-2 bg-gray-700/50 px-3 py-2 rounded-xl backdrop-blur-sm">
-              <Star className="h-4 w-4 text-yellow-400 fill-current animate-pulse" />
-              <span className="text-yellow-400 font-semibold">{phone.rating}</span>
-              <span className="text-gray-400 text-sm">({phone.reviews})</span>
             </div>
           </div>
 
           {/* Specs Preview */}
-          <div className="grid grid-cols-2 gap-3 py-3">
-            <div className="flex items-center space-x-2 text-gray-300">
-              <Cpu className="h-4 w-4 text-purple-400" />
-              <span className="text-sm">{phone.specs?.ram || 'N/A'}</span>
+          {phone.specs && (
+            <div className="grid grid-cols-2 gap-3 py-3">
+              {phone.specs.ram && (
+                <div className="flex items-center space-x-2 text-gray-300">
+                  <Cpu className="h-4 w-4 text-purple-400" />
+                  <span className="text-sm">{phone.specs.ram}</span>
+                </div>
+              )}
+              {phone.specs.storage && (
+                <div className="flex items-center space-x-2 text-gray-300">
+                  <div className="w-4 h-4 bg-blue-400 rounded-full animate-pulse" />
+                  <span className="text-sm">{phone.specs.storage}</span>
+                </div>
+              )}
             </div>
-            <div className="flex items-center space-x-2 text-gray-300">
-              <div className="w-4 h-4 bg-blue-400 rounded-full animate-pulse" />
-              <span className="text-sm">{phone.specs?.storage || 'N/A'}</span>
+          )}
+
+          {/* Seller Info */}
+          {phone.sellerId && (
+            <div className="flex items-center space-x-2 text-gray-400 text-sm">
+              <div className="w-6 h-6 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center">
+                <span className="text-white text-xs font-bold">
+                  {phone.sellerId.name?.charAt(0).toUpperCase() || 'S'}
+                </span>
+              </div>
+              <span>{phone.sellerId.name || 'Seller'}</span>
+              {phone.sellerId.rating && (
+                <div className="flex items-center">
+                  <span className="text-yellow-400">★</span>
+                  <span className="ml-1">{phone.sellerId.rating.toFixed(1)}</span>
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           {/* Location and Time */}
           <div className="flex items-center justify-between text-sm text-gray-400">
             <div className="flex items-center space-x-1">
               <MapPin className="h-4 w-4 text-green-400 animate-pulse" />
-              <span className="truncate">{phone.location}</span>
+              <span className="truncate">{phone.location || 'Location not specified'}</span>
             </div>
             <div className="flex items-center space-x-1">
               <Clock className="h-4 w-4 text-blue-400" />
-              <span>{phone.postedTime}</span>
+              <span>{formatPostedTime(phone.createdAt || phone.postedTime)}</span>
             </div>
           </div>
 
@@ -215,21 +281,6 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
               <ShoppingCart className={`h-5 w-5 transition-all ${glitchEffect ? 'animate-bounce' : ''}`} />
               <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl blur-lg opacity-0 group-hover:opacity-50 transition-opacity" />
             </button>
-          </div>
-
-          {/* Views Counter */}
-          <div className="flex items-center justify-center space-x-2 pt-2">
-            <Eye className="h-4 w-4 text-gray-500" />
-            <span className="text-sm text-gray-500">{phone.views} views</span>
-            <div className="flex space-x-1">
-              {[...Array(3)].map((_, i) => (
-                <div 
-                  key={i}
-                  className="w-1 h-1 bg-cyan-400 rounded-full animate-pulse"
-                  style={{ animationDelay: `${i * 0.3}s` }}
-                />
-              ))}
-            </div>
           </div>
         </div>
 

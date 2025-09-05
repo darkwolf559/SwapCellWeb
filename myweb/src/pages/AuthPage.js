@@ -39,6 +39,14 @@ const handleSubmit = async (e) => {
   setIsLoading(true);
   setError(null);
 
+  // ✅ Simple email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(formData.email)) {
+    setError("Please enter a valid email address");
+    setIsLoading(false);
+    return;
+  }
+
   try {
     let userData;
     if (isLogin) {
@@ -47,17 +55,15 @@ const handleSubmit = async (e) => {
       userData = await register(formData);
     }
 
-    if (userData && onNavigate) {
-      onNavigate('home');
+    if (userData) {
+      if (onNavigate) onNavigate("home");
     }
   } catch (err) {
-    setError(err.message || 'Authentication failed');
+    setError(err.message || "Authentication failed");
   } finally {
     setIsLoading(false);
   }
 };
-
-
 
   const toggleAuthMode = () => {
     setIsLogin(!isLogin);

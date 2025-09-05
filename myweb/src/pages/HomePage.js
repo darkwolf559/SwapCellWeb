@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Star, ShoppingCart, Zap, Shield, Smartphone } from 'lucide-react';
 import PhoneCard from '../components/PhoneCard';
-import { mockPhones } from '../utils/mockData';
+import { phoneAPI } from '../utils/api';
 
 const HomePage = ({ onNavigate, onPhoneSelect }) => {
-  const [searchQuery, setSearchQuery] = useState('');
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [particles, setParticles] = useState([]);
+  const [featuredPhones, setFeaturedPhones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Generate floating particles
@@ -32,21 +34,56 @@ const HomePage = ({ onNavigate, onPhoneSelect }) => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      onNavigate('phones');
+  // Fetch featured phones
+  const fetchFeaturedPhones = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await phoneAPI.getPhones({ 
+        limit: 12, // Fetch more phones to have variety for random selection
+        sort: 'newest' // Get newest phones
+      });
+      
+      const phones = response.data.phones;
+      
+      // Randomly select 3 phones from available phones
+      if (phones && phones.length > 0) {
+        const shuffled = [...phones].sort(() => 0.5 - Math.random());
+        setFeaturedPhones(shuffled.slice(0, 3));
+      } else {
+        setFeaturedPhones([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch featured phones:', err);
+      setError('Failed to load featured phones');
+      setFeaturedPhones([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  };
+  useEffect(() => {
+    fetchFeaturedPhones();
 
-  const handlePhoneSelect = (phone) => {
-    onPhoneSelect(phone);
-    onNavigate('details');
+    // Auto-refresh featured phones every 30 seconds for variety
+    const interval = setInterval(fetchFeaturedPhones, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handlePhoneSelect = async (phone) => {
+    try {
+      // Fetch full phone details
+      const response = await phoneAPI.getPhone(phone._id);
+      onPhoneSelect(response.data);
+      onNavigate('details');
+    } catch (err) {
+      console.error('Failed to fetch phone details:', err);
+      // Still navigate with basic data
+      onPhoneSelect(phone);
+      onNavigate('details');
+    }
   };
 
   return (
@@ -110,42 +147,15 @@ const HomePage = ({ onNavigate, onPhoneSelect }) => {
             
             <p className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto animate-fade-in-up leading-relaxed">
               Discover quality pre-owned smartphones with 
-              <span className="text-cyan-400 font-semibold"> advanced AI matching</span>, 
-              <span className="text-purple-400 font-semibold"> verified sellers</span>, and 
-              <span className="text-pink-400 font-semibold"> quantum-fast delivery</span>
+              <span className="text-cyan-400 font-semibold"> unbeatable prices</span>, 
+              <span className="text-purple-400 font-semibold"> certified sellers</span>, and 
+              <span className="text-pink-400 font-semibold"> trusted quality checks</span>
             </p>
-            
-            {/* Futuristic Search Bar */}
-            <div className="max-w-3xl mx-auto relative mb-16 group">
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 rounded-3xl blur-lg opacity-75 group-hover:opacity-100 transition-opacity animate-pulse" />
-              <div className="relative bg-gray-800/90 backdrop-blur-lg rounded-3xl p-2 border border-gray-700">
-                <div className="relative flex items-center">
-                  <Search className="absolute left-6 text-gray-400 h-6 w-6 animate-pulse" />
-                  <input
-                    type="text"
-                    placeholder="Search by brand, model, or AI recommendations..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    className="w-full pl-16 pr-32 py-6 text-lg bg-transparent text-white placeholder-gray-400 focus:outline-none focus:ring-0"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={handleSearch}
-                      className="absolute right-3 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white px-8 py-3 rounded-2xl font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/50"
-                    >
-                      <Zap className="h-5 w-5 inline mr-2" />
-                      Search
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
 
-            {/* Animated Stats - Fixed to stay constant */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
+            {/* Animated Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-4">
               {[
-                { value: "500+", label: "Verified Phones", color: "from-cyan-400 to-blue-500", icon: Smartphone },
+                { value: `${featuredPhones.length}+`, label: "Verified Phones", color: "from-cyan-400 to-blue-500", icon: Smartphone },
                 { value: "98%", label: "Customer Satisfaction", color: "from-purple-400 to-pink-500", icon: Star },
                 { value: "24h", label: "Fast Response", color: "from-green-400 to-teal-500", icon: Zap }
               ].map((stat, index) => (
@@ -155,7 +165,7 @@ const HomePage = ({ onNavigate, onPhoneSelect }) => {
                   style={{ animationDelay: `${index * 0.3}s` }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r opacity-20 group-hover:opacity-40 rounded-2xl blur-xl transition-opacity" 
-                       style={{ background: `linear-gradient(135deg, ${stat.color})` }} />
+                       style={{ background: `linear-gradient(135deg, ${stat.color.split(' ').join(', ')})` }} />
                   <div className="relative bg-gray-800/50 backdrop-blur-lg border border-gray-700 rounded-2xl p-8 hover:border-gray-500 transition-all duration-300 transform hover:scale-105">
                     <div className="flex justify-center mb-4">
                       <stat.icon className={`h-8 w-8 bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`} />
@@ -173,73 +183,120 @@ const HomePage = ({ onNavigate, onPhoneSelect }) => {
       </div>
 
       {/* Featured Phones Section */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-16">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="text-center mb-12">
           <h2 className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 mb-4 animate-subtle-glow">
-            Featured Quantum Phones
+            Featured Phones
           </h2>
           <div className="w-32 h-1 bg-gradient-to-r from-cyan-400 to-purple-400 mx-auto rounded-full animate-pulse" />
         </div>
         
-        <div className="grid grid-cols-1 md:grid-2 lg:grid-cols-3 gap-8">
-          {mockPhones.slice(0, 3).map((phone, index) => (
-            <div 
-              key={phone.id} 
-              className="animate-fade-in-up transform hover:scale-105 transition-all duration-500"
-              style={{ animationDelay: `${index * 0.2}s` }}
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-20">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500/20 border-t-purple-500 mx-auto mb-4"></div>
+            <p className="text-gray-400 text-xl">Loading featured phones...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-20 bg-red-900/20 backdrop-blur-lg rounded-3xl border border-red-500/30 max-w-2xl mx-auto">
+            <Smartphone className="h-24 w-24 text-red-400 mx-auto mb-6" />
+            <h3 className="text-2xl font-bold text-red-300 mb-4">Failed to Load Phones</h3>
+            <p className="text-red-400 mb-8">{error}</p>
+            <button
+              onClick={fetchFeaturedPhones}
+              className="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 
+                       text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 
+                       transform hover:scale-105 hover:shadow-lg hover:shadow-red-500/25"
             >
-              <PhoneCard
-                phone={phone}
-                onViewDetails={handlePhoneSelect}
-                showAnimation={true}
-              />
-            </div>
-          ))}
-        </div>
+              <Zap className="inline h-5 w-5 mr-2" />
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* Phone Grid */}
+        {!loading && !error && featuredPhones.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {featuredPhones.map((phone, index) => (
+              <div 
+                key={`${phone._id}-${index}`} // Unique key for re-renders
+                className="animate-fade-in-up transform hover:scale-105 transition-all duration-500"
+                style={{ animationDelay: `${index * 0.2}s` }}
+              >
+                <PhoneCard
+                  phone={phone}
+                  onViewDetails={handlePhoneSelect}
+                  showAnimation={true}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* No Phones Available */}
+        {!loading && !error && featuredPhones.length === 0 && (
+          <div className="text-center py-20 bg-gray-800/20 backdrop-blur-lg rounded-3xl border border-gray-700/30 max-w-2xl mx-auto">
+            <Smartphone className="h-24 w-24 text-gray-600 mx-auto mb-6 animate-bounce" />
+            <h3 className="text-2xl font-bold text-gray-300 mb-4">No Phones Available</h3>
+            <p className="text-gray-500 mb-8">
+              Be the first to list a phone on our platform!
+            </p>
+            <button
+              onClick={() => onNavigate('auth')}
+              className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 
+                       text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 
+                       transform hover:scale-105 hover:shadow-lg hover:shadow-purple-500/25"
+            >
+              Get Started
+            </button>
+          </div>
+        )}
         
-        <div className="text-center mt-16">
-          <button
-            onClick={() => onNavigate('phones')}
-            className="relative group bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-700 hover:via-blue-700 hover:to-cyan-700 text-white px-12 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform hover:scale-110 hover:shadow-2xl hover:shadow-purple-500/50"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-cyan-600 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-            <span className="relative flex items-center">
-              <Smartphone className="h-6 w-6 mr-3 animate-pulse" />
-              Explore All Phones
-              <div className="ml-3 w-2 h-2 bg-yellow-400 rounded-full animate-ping" />
-            </span>
-          </button>
-        </div>
+        {/* Explore All Phones Button */}
+        {featuredPhones.length > 0 && (
+          <div className="text-center mt-16">
+            <button
+              onClick={() => onNavigate('phones')}
+              className="relative group bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-700 hover:via-blue-700 hover:to-cyan-700 text-white px-12 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform hover:scale-110 hover:shadow-2xl hover:shadow-purple-500/50"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-cyan-600 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
+              <span className="relative flex items-center">
+                <Smartphone className="h-6 w-6 mr-3 animate-pulse" />
+                Explore All Phones
+                <div className="ml-3 w-2 h-2 bg-yellow-400 rounded-full animate-ping" />
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Features Section - Removed rotation effects */}
+      {/* Features Section */}
       <div className="relative z-10 py-20 mt-16">
         <div className="absolute inset-0 bg-gradient-to-r from-purple-900/50 to-blue-900/50 backdrop-blur-sm" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-4xl md:text-5xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-400 mb-16 animate-subtle-glow">
-            Why Choose PhoneHub?
-          </h2>
-          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               {
                 icon: Search,
-                title: "AI-Powered Search",
-                description: "Advanced quantum algorithms find your perfect match in nanoseconds",
+                title: "Smart Search",
+                description: "Advanced search algorithms help you find your perfect phone match instantly",
                 gradient: "from-cyan-500 to-blue-600",
                 bgGradient: "from-cyan-500/10 to-blue-600/10"
               },
               {
                 icon: Shield,
-                title: "Quantum Verified",
-                description: "Every seller undergoes multi-dimensional verification and blockchain authentication",
+                title: "Verified Sellers",
+                description: "Every seller undergoes thorough verification for your peace of mind and security",
                 gradient: "from-purple-500 to-pink-600",
                 bgGradient: "from-purple-500/10 to-pink-600/10"
               },
               {
                 icon: Zap,
-                title: "Hyper-Speed Trading",
-                description: "Lightning-fast transactions with interdimensional security protocols",
+                title: "Fast Transactions",
+                description: "Lightning-fast and secure transactions with real-time updates and notifications",
                 gradient: "from-green-500 to-teal-600",
                 bgGradient: "from-green-500/10 to-teal-600/10"
               }
