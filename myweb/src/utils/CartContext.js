@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import api from './api';
-import SocketService from './socket';
+import { cartAPI, apiUtils } from './api';
 
 const CartContext = createContext();
 
@@ -16,117 +15,131 @@ export const useCart = () => {
 export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { user, isAuthenticated, getAuthHeaders } = useAuth();
+  const [error, setError] = useState(null);
+  const { user, isAuthenticated } = useAuth();
 
-  // Create a more robust API instance with auth headers
-  const makeAuthenticatedRequest = useCallback(async (url, options = {}) => {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-      ...options.headers
-    };
-
-    const response = await fetch(`http://localhost:5000/api${url}`, {
-      ...options,
-      headers
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP ${response.status}`);
+  // Clear error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(timer);
     }
-
-    return response.json();
-  }, [getAuthHeaders]);
+  }, [error]);
 
   // Load cart from API when user logs in
   const loadCart = useCallback(async () => {
-    if (!isAuthenticated()) return;
+    if (!isAuthenticated()) {
+      setCart([]);
+      return;
+    }
     
     try {
       setLoading(true);
+      setError(null);
       console.log('Loading cart for authenticated user...');
       
-      const response = await makeAuthenticatedRequest('/cart');
-      console.log('Cart loaded:', response);
+      const response = await cartAPI.getCart();
+      console.log('Cart API response:', response);
       
-      setCart(response.items || []);
+      // Handle the response data structure
+      let cartItems = [];
+      
+      if (response.data?.items) {
+        cartItems = response.data.items;
+      } else if (response.data?.cart?.items) {
+        cartItems = response.data.cart.items;
+      } else if (Array.isArray(response.data)) {
+        cartItems = response.data;
+      }
+
+      // Format cart items for consistency
+      const formattedItems = cartItems.map(item => apiUtils.formatCartItem(item));
+      
+      console.log('Formatted cart items:', formattedItems);
+      setCart(formattedItems);
+      
     } catch (error) {
       console.error('Failed to load cart:', error);
-      // Fallback to empty cart on error
+      const errorMessage = apiUtils.handleError(error);
+      setError(`Failed to load cart: ${errorMessage}`);
       setCart([]);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, makeAuthenticatedRequest]);
+  }, [isAuthenticated]);
 
   // Load cart data when auth state changes
   useEffect(() => {
     if (isAuthenticated()) {
       loadCart();
-      
-      // Listen for real-time cart updates
-      if (SocketService && typeof SocketService.onCartUpdate === 'function') {
-        SocketService.onCartUpdate((updatedCart) => {
-          console.log('Cart updated via socket:', updatedCart);
-          setCart(updatedCart.items || []);
-        });
-      }
     } else {
-      // Load cart from memory for non-authenticated users (no localStorage)
-      console.log('Loading guest cart from memory...');
-      setCart([]); // Start with empty cart for guests
+      // Clear cart when user logs out
+      setCart([]);
     }
-
-    // Cleanup socket listener on unmount
-    return () => {
-      if (SocketService && typeof SocketService.off === 'function') {
-        SocketService.off('cartUpdate');
-      }
-    };
   }, [user, isAuthenticated, loadCart]);
 
   const addToCart = async (phone, quantity = 1) => {
     try {
       console.log('Adding to cart:', phone, 'Quantity:', quantity, 'Authenticated:', isAuthenticated());
+      setError(null);
       
       if (isAuthenticated()) {
         // Add to server cart for authenticated users
         console.log('Adding to server cart...');
         
-        const response = await makeAuthenticatedRequest('/cart/add', {
-          method: 'POST',
-          body: JSON.stringify({
-            phoneId: phone._id || phone.id,
-            quantity
-          })
-        });
+        const result = await cartAPI.addToCart(phone._id || phone.id, quantity);
+        console.log('Server cart response:', result);
         
-        console.log('Server cart response:', response);
-        setCart(response.items || []);
-        
-        return { success: true, message: 'Item added to cart' };
+        if (result.success) {
+          // Handle different response data structures
+          let cartItems = [];
+          
+          if (result.data?.cart?.items) {
+            cartItems = result.data.cart.items;
+          } else if (result.data?.items) {
+            cartItems = result.data.items;
+          } else if (Array.isArray(result.data)) {
+            cartItems = result.data;
+          }
+
+          // Format cart items for consistency
+          const formattedItems = cartItems.map(item => apiUtils.formatCartItem(item));
+          setCart(formattedItems);
+          
+          return { 
+            success: true, 
+            message: result.message || 'Item added to cart successfully' 
+          };
+        } else {
+          setError(result.message);
+          return result;
+        }
       } else {
         // Add to local cart for guest users (in-memory only)
         console.log('Adding to guest cart...');
         
         setCart(prevCart => {
-          const existingItem = prevCart.find(item => 
-            (item._id || item.id) === (phone._id || phone.id)
+          const phoneId = phone._id || phone.id;
+          const existingItemIndex = prevCart.findIndex(item => 
+            (item._id || item.id) === phoneId
           );
           
-          if (existingItem) {
-            return prevCart.map(item =>
-              (item._id || item.id) === (phone._id || phone.id)
+          if (existingItemIndex > -1) {
+            // Update quantity if item exists
+            return prevCart.map((item, index) =>
+              index === existingItemIndex
                 ? { ...item, quantity: item.quantity + quantity }
                 : item
             );
           } else {
-            return [...prevCart, { 
-              ...phone, 
-              id: phone._id || phone.id, // Ensure consistent ID
-              quantity 
-            }];
+            // Add new item to cart
+            const newItem = apiUtils.formatCartItem({
+              ...phone,
+              _id: phoneId,
+              id: phoneId,
+              quantity
+            });
+            return [...prevCart, newItem];
           }
         });
         
@@ -134,23 +147,47 @@ export const CartProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Failed to add item to cart:', error);
+      const errorMessage = apiUtils.handleError(error);
+      setError(`Failed to add to cart: ${errorMessage}`);
       return { 
         success: false, 
-        message: error.message || 'Failed to add item to cart' 
+        message: errorMessage
       };
     }
   };
 
   const removeFromCart = async (phoneId) => {
     try {
+      setError(null);
+      
       if (isAuthenticated()) {
         // Remove from server cart
-        const response = await makeAuthenticatedRequest(`/cart/remove/${phoneId}`, {
-          method: 'DELETE'
-        });
-        setCart(response.items || []);
+        const result = await cartAPI.removeFromCart(phoneId);
         
-        return { success: true, message: 'Item removed from cart' };
+        if (result.success) {
+          // Handle different response data structures
+          let cartItems = [];
+          
+          if (result.data?.cart?.items) {
+            cartItems = result.data.cart.items;
+          } else if (result.data?.items) {
+            cartItems = result.data.items;
+          } else if (Array.isArray(result.data)) {
+            cartItems = result.data;
+          }
+
+          // Format cart items for consistency
+          const formattedItems = cartItems.map(item => apiUtils.formatCartItem(item));
+          setCart(formattedItems);
+          
+          return { 
+            success: true, 
+            message: result.message || 'Item removed from cart' 
+          };
+        } else {
+          setError(result.message);
+          return result;
+        }
       } else {
         // Remove from local cart for guest users
         setCart(prevCart => prevCart.filter(item => 
@@ -161,9 +198,11 @@ export const CartProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Failed to remove item from cart:', error);
+      const errorMessage = apiUtils.handleError(error);
+      setError(`Failed to remove from cart: ${errorMessage}`);
       return { 
         success: false, 
-        message: error.message || 'Failed to remove item from cart' 
+        message: errorMessage
       };
     }
   };
@@ -174,18 +213,36 @@ export const CartProvider = ({ children }) => {
     }
 
     try {
+      setError(null);
+      
       if (isAuthenticated()) {
         // Update on server
-        const response = await makeAuthenticatedRequest('/cart/update', {
-          method: 'PUT',
-          body: JSON.stringify({
-            phoneId,
-            quantity
-          })
-        });
-        setCart(response.items || []);
+        const result = await cartAPI.updateCart(phoneId, quantity);
         
-        return { success: true, message: 'Quantity updated' };
+        if (result.success) {
+          // Handle different response data structures
+          let cartItems = [];
+          
+          if (result.data?.cart?.items) {
+            cartItems = result.data.cart.items;
+          } else if (result.data?.items) {
+            cartItems = result.data.items;
+          } else if (Array.isArray(result.data)) {
+            cartItems = result.data;
+          }
+
+          // Format cart items for consistency
+          const formattedItems = cartItems.map(item => apiUtils.formatCartItem(item));
+          setCart(formattedItems);
+          
+          return { 
+            success: true, 
+            message: result.message || 'Quantity updated' 
+          };
+        } else {
+          setError(result.message);
+          return result;
+        }
       } else {
         // Update local cart for guest users
         setCart(prevCart =>
@@ -200,54 +257,91 @@ export const CartProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Failed to update quantity:', error);
+      const errorMessage = apiUtils.handleError(error);
+      setError(`Failed to update quantity: ${errorMessage}`);
       return { 
         success: false, 
-        message: error.message || 'Failed to update quantity' 
+        message: errorMessage
       };
     }
   };
 
   const clearCart = async () => {
     try {
+      setError(null);
+      
       if (isAuthenticated()) {
         // Clear server cart
-        await makeAuthenticatedRequest('/cart/clear', {
-          method: 'DELETE'
-        });
-        setCart([]);
+        const result = await cartAPI.clearCart();
         
-        return { success: true, message: 'Cart cleared' };
+        if (result.success) {
+          setCart([]);
+          return { 
+            success: true, 
+            message: result.message || 'Cart cleared successfully' 
+          };
+        } else {
+          setError(result.message);
+          return result;
+        }
       } else {
         // Clear local cart for guest users
         setCart([]);
-        
         return { success: true, message: 'Cart cleared' };
       }
     } catch (error) {
       console.error('Failed to clear cart:', error);
+      const errorMessage = apiUtils.handleError(error);
+      setError(`Failed to clear cart: ${errorMessage}`);
       return { 
         success: false, 
-        message: error.message || 'Failed to clear cart' 
+        message: errorMessage
       };
     }
   };
 
-  const mergeGuestCart = async () => {
-    // For this version, we'll skip guest cart merging since we're not using localStorage
-    // You can implement this later if needed
-    console.log('Guest cart merging not implemented in this version');
-    return { success: true, message: 'No guest cart to merge' };
+  const mergeGuestCart = async (guestItems = []) => {
+    if (!isAuthenticated() || guestItems.length === 0) {
+      return { success: true, message: 'No guest cart to merge' };
+    }
+
+    try {
+      setError(null);
+      const result = await cartAPI.mergeGuestCart(guestItems);
+      
+      if (result.success) {
+        // Reload cart after merging
+        await loadCart();
+        return { 
+          success: true, 
+          message: result.message || 'Guest cart merged successfully' 
+        };
+      } else {
+        setError(result.message);
+        return result;
+      }
+    } catch (error) {
+      console.error('Failed to merge guest cart:', error);
+      const errorMessage = apiUtils.handleError(error);
+      setError(`Failed to merge cart: ${errorMessage}`);
+      return { 
+        success: false, 
+        message: errorMessage
+      };
+    }
   };
 
+  // Utility functions
   const getCartTotal = () => {
     return cart.reduce((total, item) => {
-      const price = item.salePrice || item.price || 0;
-      return total + (price * item.quantity);
+      const price = item.price || 0;
+      const quantity = item.quantity || 0;
+      return total + (price * quantity);
     }, 0);
   };
 
   const getCartItemsCount = () => {
-    return cart.reduce((count, item) => count + item.quantity, 0);
+    return cart.reduce((count, item) => count + (item.quantity || 0), 0);
   };
 
   const isInCart = (phoneId) => {
@@ -259,142 +353,11 @@ export const CartProvider = ({ children }) => {
     return item ? item.quantity : 0;
   };
 
-  // Checkout process
-  const initializeCheckout = async (shippingAddress, paymentMethod) => {
-    if (!isAuthenticated()) {
-      throw new Error('Authentication required for checkout');
-    }
-
-    if (cart.length === 0) {
-      throw new Error('Cart is empty');
-    }
-
-    try {
-      setLoading(true);
-      
-      const response = await makeAuthenticatedRequest('/checkout/initialize', {
-        method: 'POST',
-        body: JSON.stringify({
-          items: cart,
-          shippingAddress,
-          paymentMethod,
-          total: getCartTotal()
-        })
-      });
-
-      return {
-        success: true,
-        checkoutSession: response.checkoutSession,
-        orderId: response.orderId
-      };
-    } catch (error) {
-      console.error('Failed to initialize checkout:', error);
-      throw new Error(error.message || 'Failed to initialize checkout');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const confirmOrder = async (orderId, paymentDetails) => {
-    try {
-      setLoading(true);
-      
-      const response = await makeAuthenticatedRequest('/checkout/confirm', {
-        method: 'POST',
-        body: JSON.stringify({
-          orderId,
-          paymentDetails
-        })
-      });
-
-      // Clear cart after successful order
-      if (response.success) {
-        setCart([]);
-      }
-
-      return {
-        success: response.success,
-        order: response.order,
-        message: response.message
-      };
-    } catch (error) {
-      console.error('Failed to confirm order:', error);
-      throw new Error(error.message || 'Failed to confirm order');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Validate cart items (check availability, pricing)
-  const validateCart = async () => {
-    if (cart.length === 0) return { valid: true, items: [] };
-
-    try {
-      const phoneIds = cart.map(item => item._id || item.id);
-      const response = await makeAuthenticatedRequest('/phones/validate', {
-        method: 'POST',
-        body: JSON.stringify({ phoneIds })
-      });
-      
-      const validatedItems = response.phones || [];
-      const updatedCart = [];
-      const issues = [];
-
-      cart.forEach(cartItem => {
-        const validatedItem = validatedItems.find(item => 
-          item._id === (cartItem._id || cartItem.id)
-        );
-        
-        if (!validatedItem) {
-          issues.push({
-            phoneId: cartItem._id || cartItem.id,
-            title: cartItem.title,
-            issue: 'Phone no longer available'
-          });
-        } else if (validatedItem.price !== cartItem.price) {
-          issues.push({
-            phoneId: cartItem._id || cartItem.id,
-            title: cartItem.title,
-            issue: `Price changed from $${cartItem.price} to $${validatedItem.price}`
-          });
-          updatedCart.push({
-            ...cartItem,
-            ...validatedItem,
-            quantity: cartItem.quantity
-          });
-        } else {
-          updatedCart.push({
-            ...cartItem,
-            ...validatedItem,
-            quantity: cartItem.quantity
-          });
-        }
-      });
-
-      // Update cart with validated items
-      if (updatedCart.length !== cart.length || issues.length > 0) {
-        setCart(updatedCart);
-      }
-
-      return {
-        valid: issues.length === 0,
-        items: updatedCart,
-        issues
-      };
-    } catch (error) {
-      console.error('Failed to validate cart:', error);
-      return {
-        valid: false,
-        items: cart,
-        issues: [{ issue: 'Failed to validate cart items' }]
-      };
-    }
-  };
-
   const contextValue = {
     // State
     cart,
     loading,
+    error,
     
     // Actions
     addToCart,
@@ -409,13 +372,12 @@ export const CartProvider = ({ children }) => {
     isInCart,
     getItemQuantity,
     
-    // Checkout
-    initializeCheckout,
-    confirmOrder,
-    validateCart,
-    
     // Data refresh
-    loadCart
+    loadCart,
+    
+    // Error handling
+    setError: (message) => setError(message),
+    clearError: () => setError(null)
   };
 
   return (

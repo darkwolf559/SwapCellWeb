@@ -48,18 +48,41 @@ const ProfilePage = ({ onNavigate }) => {
         // Fetch seller-specific data
         const [listingsResponse, salesResponse] = await Promise.all([
           phoneAPI.getMyListings(),
-          orderAPI.getMySales().catch(err => ({ data: [] })) // Fallback if no sales endpoint
+          orderAPI.getMySales().catch(err => {
+            console.log('Sales endpoint error:', err);
+            return { data: [] };
+          })
         ]);
 
-        setListings(listingsResponse.data);
-        const sales = salesResponse.data || [];
+        setListings(listingsResponse.data || []);
+        
+        // Ensure sales is always an array
+        let sales = [];
+        if (salesResponse && salesResponse.data) {
+          if (Array.isArray(salesResponse.data)) {
+            sales = salesResponse.data;
+          } else if (salesResponse.data.orders && Array.isArray(salesResponse.data.orders)) {
+            sales = salesResponse.data.orders;
+          } else if (salesResponse.data.sales && Array.isArray(salesResponse.data.sales)) {
+            sales = salesResponse.data.sales;
+          }
+        }
+        
         setOrders(sales);
 
-        // Calculate stats
-        const activeListings = listingsResponse.data.filter(phone => phone.isAvailable).length;
-        const totalSold = sales.length;
-        const totalRevenue = sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
-        const totalViews = listingsResponse.data.reduce((sum, phone) => sum + (phone.views || 0), 0);
+        // Calculate stats with proper array checks
+        const listingsData = listingsResponse.data || [];
+        const activeListings = Array.isArray(listingsData) 
+          ? listingsData.filter(phone => phone.isAvailable).length 
+          : 0;
+        
+        const totalSold = Array.isArray(sales) ? sales.length : 0;
+        const totalRevenue = Array.isArray(sales) 
+          ? sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0)
+          : 0;
+        const totalViews = Array.isArray(listingsData)
+          ? listingsData.reduce((sum, phone) => sum + (phone.views || 0), 0)
+          : 0;
 
         setStats({
           activeListings,
@@ -71,7 +94,9 @@ const ProfilePage = ({ onNavigate }) => {
         // Try to fetch analytics if available
         try {
           const analyticsResponse = await analyticsAPI.getDashboard();
-          setStats(prev => ({ ...prev, ...analyticsResponse.data }));
+          if (analyticsResponse && analyticsResponse.data) {
+            setStats(prev => ({ ...prev, ...analyticsResponse.data }));
+          }
         } catch (analyticsError) {
           console.log('Analytics not available:', analyticsError);
         }
@@ -80,16 +105,33 @@ const ProfilePage = ({ onNavigate }) => {
         // Fetch buyer-specific data
         try {
           const ordersResponse = await orderAPI.getMyOrders();
-          setOrders(ordersResponse.data || []);
+          let orderData = [];
           
-          const totalSpent = ordersResponse.data.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+          if (ordersResponse && ordersResponse.data) {
+            if (Array.isArray(ordersResponse.data)) {
+              orderData = ordersResponse.data;
+            } else if (ordersResponse.data.orders && Array.isArray(ordersResponse.data.orders)) {
+              orderData = ordersResponse.data.orders;
+            }
+          }
+          
+          setOrders(orderData);
+          
+          const totalSpent = Array.isArray(orderData)
+            ? orderData.reduce((sum, order) => sum + (order.totalAmount || 0), 0)
+            : 0;
+            
           setStats({
-            ordersPlaced: ordersResponse.data.length,
+            ordersPlaced: orderData.length,
             totalSpent
           });
         } catch (orderError) {
           console.log('Orders not available:', orderError);
           setOrders([]);
+          setStats({
+            ordersPlaced: 0,
+            totalSpent: 0
+          });
         }
       }
 

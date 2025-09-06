@@ -30,7 +30,6 @@ const getCart = async (req, res) => {
       cart = { items: [] };
     }
 
-    console.log('Cart found:', cart);
     res.json(cart);
   } catch (err) {
     console.error('Error getting cart:', err);
@@ -40,8 +39,6 @@ const getCart = async (req, res) => {
 
 const addToCart = async (req, res) => {
   try {
-    console.log('Add to cart request:', req.body);
-    console.log('User:', req.user);
     
     const { phoneId, quantity = 1 } = req.body;
     
@@ -97,7 +94,6 @@ const addToCart = async (req, res) => {
         }
       });
 
-    console.log('Cart after adding item:', populatedCart);
 
     // Emit socket event if available
     const io = getIO();

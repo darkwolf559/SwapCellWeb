@@ -12,6 +12,7 @@ import SocketService from './utils/socket';
 import './index.css';
 import { FavoritesProvider } from './utils/FavoritesContext';
 import AddPhonePage from './pages/AddPhonePage';
+import CheckoutPage from './pages/CheckoutPage';
 
 const AppContent = () => {
   const [currentPage, setCurrentPage] = useState('home');
@@ -73,8 +74,10 @@ const AppContent = () => {
         return <AddPhonePage onNavigate={handlePageNavigation} />;  
       case 'details':
         return <PhoneDetailsPage phone={selectedPhone} onNavigate={handlePageNavigation} />;
-      case 'cart':
+      case 'cart':  
         return <CartPage onNavigate={handlePageNavigation} />;
+      case 'checkout': 
+        return <CheckoutPage onNavigate={handlePageNavigation} />;  
       case 'auth':
         return <AuthPage onNavigate={handlePageNavigation} />;
       case 'profile':

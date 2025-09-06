@@ -43,8 +43,11 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
+  
   register: (userData) => api.post('/auth/register', userData),
+  
   getProfile: () => api.get('/users/profile'),
+  
   updateProfile: (userData) => {
     // Check if userData is FormData (contains file)
     if (userData instanceof FormData) {
@@ -57,6 +60,7 @@ export const authAPI = {
     // Regular JSON update
     return api.put('/users/profile', userData);
   },
+  
   updateProfileWithPhoto: (formData) => api.put('/users/profile', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
@@ -67,31 +71,137 @@ export const authAPI = {
 // Phone API
 export const phoneAPI = {
   getPhones: (params = {}) => api.get('/phones', { params }),
+  
+  getAllPhones: (params = {}) => api.get('/phones', { params }),
+  
   getPhone: (id) => api.get(`/phones/${id}`),
+  
+  getPhoneById: (id) => api.get(`/phones/${id}`),
+  
   createPhone: (phoneData) => api.post('/phones', phoneData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
   }),
+  
   updatePhone: (id, phoneData) => api.put(`/phones/${id}`, phoneData),
+  
   deletePhone: (id) => api.delete(`/phones/${id}`),
+  
   getMyListings: () => api.get('/users/my-listings'),
+  
   searchSuggestions: (query) => api.get('/search/suggestions', { params: { query } }),
+  
+  validatePhones: (phoneIds) => api.post('/phones/validate', { phoneIds }),
 };
 
-// Cart API
+// Enhanced Cart API with proper error handling
 export const cartAPI = {
   getCart: () => api.get('/cart'),
-  addToCart: (phoneId, quantity = 1) => api.post('/cart/add', { phoneId, quantity }),
-  updateCart: (phoneId, quantity) => api.put('/cart/update', { phoneId, quantity }),
-  clearCart: () => api.delete('/cart/clear'),
+  
+  addToCart: async (phoneId, quantity = 1) => {
+    try {
+      const response = await api.post('/cart/add', { phoneId, quantity });
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Item added to cart'
+      };
+    } catch (error) {
+      console.error('Cart API - Add to cart error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to add item to cart',
+        error: error.response?.data || error.message
+      };
+    }
+  },
+  
+  updateCart: async (phoneId, quantity) => {
+    try {
+      const response = await api.put('/cart/update', { phoneId, quantity });
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Cart updated'
+      };
+    } catch (error) {
+      console.error('Cart API - Update cart error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to update cart',
+        error: error.response?.data || error.message
+      };
+    }
+  },
+  
+  removeFromCart: async (phoneId) => {
+    try {
+      const response = await api.delete(`/cart/remove/${phoneId}`);
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Item removed from cart'
+      };
+    } catch (error) {
+      console.error('Cart API - Remove from cart error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to remove item from cart',
+        error: error.response?.data || error.message
+      };
+    }
+  },
+  
+  clearCart: async () => {
+    try {
+      const response = await api.delete('/cart/clear');
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Cart cleared'
+      };
+    } catch (error) {
+      console.error('Cart API - Clear cart error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to clear cart',
+        error: error.response?.data || error.message
+      };
+    }
+  },
+  
+  mergeGuestCart: async (guestItems) => {
+    try {
+      const response = await api.post('/cart/merge', { guestItems });
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Cart merged successfully'
+      };
+    } catch (error) {
+      console.error('Cart API - Merge cart error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to merge cart',
+        error: error.response?.data || error.message
+      };
+    }
+  }
 };
 
-// Order API
+// Enhanced Order API
 export const orderAPI = {
   createOrder: (orderData) => api.post('/orders/create', orderData),
+  
+  sendConfirmation: (orderId, email) => api.post('/orders/send-confirmation', { orderId, email }),
+  
   getMyOrders: () => api.get('/orders/my-orders'),
+  
   getMySales: () => api.get('/orders/my-sales'),
+  
+  getOrderDetails: (orderId) => api.get(`/orders/${orderId}`),
+  
   updateOrderStatus: (orderId, status) => api.put(`/orders/${orderId}/status`, { status }),
 };
 
@@ -105,6 +215,7 @@ export const favoritesAPI = {
 export const analyticsAPI = {
   getDashboard: () => api.get('/analytics/dashboard'),
   getPhoneViews: (phoneId) => api.get(`/analytics/phone/${phoneId}/views`),
+  getOrderStats: () => api.get('/analytics/orders'),
 };
 
 // File upload utility
@@ -119,6 +230,7 @@ export const uploadAPI = {
       },
     });
   },
+  
   uploadMultipleImages: async (files) => {
     const formData = new FormData();
     files.forEach((file, index) => {
@@ -131,6 +243,7 @@ export const uploadAPI = {
       },
     });
   },
+  
   uploadProfilePicture: async (file, additionalData = {}) => {
     const formData = new FormData();
     formData.append('profilePicture', file);
@@ -150,18 +263,24 @@ export const uploadAPI = {
   },
 };
 
-// Utility functions
+// Comprehensive utility functions
 export const apiUtils = {
   // Handle API errors consistently
   handleError: (error) => {
+    console.error('API Error:', error);
+    
     if (error.response) {
       // Server responded with error status
-      return error.response.data.message || 'Server error occurred';
+      const message = error.response.data?.message || error.response.data?.error || 'Server error occurred';
+      console.error('Server Error:', error.response.status, message);
+      return message;
     } else if (error.request) {
       // Network error
+      console.error('Network Error:', error.request);
       return 'Network error. Please check your connection.';
     } else {
       // Other error
+      console.error('Request Error:', error.message);
       return error.message || 'An unexpected error occurred';
     }
   },
@@ -175,13 +294,13 @@ export const apiUtils = {
       specs: {
         ...phoneData.specs,
         // Ensure all spec fields are strings
-        ram: phoneData.specs.ram?.toString() || '',
-        storage: phoneData.specs.storage?.toString() || '',
-        battery: phoneData.specs.battery?.toString() || '',
-        camera: phoneData.specs.camera?.toString() || '',
-        processor: phoneData.specs.processor?.toString() || '',
-        screen: phoneData.specs.screen?.toString() || '',
-        os: phoneData.specs.os?.toString() || '',
+        ram: phoneData.specs?.ram?.toString() || '',
+        storage: phoneData.specs?.storage?.toString() || '',
+        battery: phoneData.specs?.battery?.toString() || '',
+        camera: phoneData.specs?.camera?.toString() || '',
+        processor: phoneData.specs?.processor?.toString() || '',
+        screen: phoneData.specs?.screen?.toString() || '',
+        os: phoneData.specs?.os?.toString() || '',
       }
     };
   },
@@ -215,6 +334,66 @@ export const apiUtils = {
     }
 
     return true;
+  },
+
+  // Validate checkout form
+  validateCheckoutForm: (formData) => {
+    const errors = {};
+    
+    // Personal information validation
+    if (!formData.firstName?.trim()) errors.firstName = 'First name is required';
+    if (!formData.lastName?.trim()) errors.lastName = 'Last name is required';
+    
+    // Mobile validation
+    if (!formData.mobile?.trim()) {
+      errors.mobile = 'Mobile number is required';
+    } else if (!/^(\+94|0)[0-9]{9}$/.test(formData.mobile)) {
+      errors.mobile = 'Please enter a valid Sri Lankan mobile number';
+    }
+    
+    // Email validation
+    if (!formData.email?.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    // Address validation
+    if (!formData.province) errors.province = 'Province is required';
+    if (!formData.district) errors.district = 'District is required';
+    if (!formData.city?.trim()) errors.city = 'City is required';
+    if (!formData.addressLine1?.trim()) errors.addressLine1 = 'Address line 1 is required';
+    
+    return errors;
+  },
+
+  // Validate payment data
+  validatePaymentData: (paymentData) => {
+    const errors = {};
+    
+    if (!paymentData.cardNumber?.trim()) {
+      errors.cardNumber = 'Card number is required';
+    } else if (!/^[0-9]{16}$/.test(paymentData.cardNumber.replace(/\s/g, ''))) {
+      errors.cardNumber = 'Please enter a valid 16-digit card number';
+    }
+    
+    if (!paymentData.expiryDate?.trim()) {
+      errors.expiryDate = 'Expiry date is required';
+    } else if (!/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(paymentData.expiryDate)) {
+      errors.expiryDate = 'Please enter expiry date in MM/YY format';
+    }
+    
+    if (!paymentData.cvv?.trim()) {
+      errors.cvv = 'CVV is required';
+    } else if (!/^[0-9]{3,4}$/.test(paymentData.cvv)) {
+      errors.cvv = 'Please enter a valid CVV';
+    }
+    
+    if (!paymentData.cardholderName?.trim()) {
+      errors.cardholderName = 'Cardholder name is required';
+    }
+    
+    return errors;
   },
 
   // Validate profile picture
@@ -261,6 +440,84 @@ export const apiUtils = {
       
       img.src = URL.createObjectURL(file);
     });
+  },
+
+  // Format cart item for consistency
+  formatCartItem: (item) => {
+    const phoneData = item.phoneId || item;
+    return {
+      _id: phoneData._id || phoneData.id,
+      id: phoneData._id || phoneData.id,
+      title: phoneData.title || phoneData.name || 'Phone',
+      brand: phoneData.brand || 'Unknown',
+      price: phoneData.price || 0,
+      image: phoneData.images?.[0] || phoneData.image || '/api/placeholder/400/300',
+      images: phoneData.images || [phoneData.image] || [],
+      condition: phoneData.condition || 'Good',
+      location: phoneData.location || 'Location not specified',
+      specs: phoneData.specs || {},
+      quantity: item.quantity || 1,
+      sellerId: phoneData.sellerId,
+      createdAt: phoneData.createdAt,
+      addedAt: item.addedAt
+    };
+  },
+
+  // Get proper image URL with fallback
+  getImageUrl: (imagePath, baseUrl = null) => {
+    if (!imagePath) return '/api/placeholder/400/300';
+    
+    // If it's already a full URL, return it
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    
+    // If it's a placeholder, return it
+    if (imagePath.startsWith('/api/placeholder')) {
+      return imagePath;
+    }
+    
+    // Construct full URL
+    const base = baseUrl || process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    
+    if (imagePath.startsWith('/uploads/')) {
+      return `${base}${imagePath}`;
+    }
+    
+    return `${base}/uploads/phones/${imagePath}`;
+  },
+
+  // Format currency
+  formatCurrency: (amount, currency = 'LKR') => {
+    return `${currency} ${amount.toLocaleString()}`;
+  },
+
+  // Format date
+  formatDate: (date, options = {}) => {
+    const defaultOptions = {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      ...options
+    };
+    return new Date(date).toLocaleDateString('en-US', defaultOptions);
+  },
+
+  // Generate order summary
+  generateOrderSummary: (cart, shippingCost = 0) => {
+    const subtotal = cart.reduce((sum, item) => 
+      sum + (item.price * item.quantity), 0
+    );
+    const total = subtotal + shippingCost;
+    const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+    
+    return {
+      subtotal,
+      shippingCost,
+      total,
+      itemCount,
+      items: cart
+    };
   }
 };
 
