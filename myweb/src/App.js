@@ -13,21 +13,26 @@ import './index.css';
 import { FavoritesProvider } from './utils/FavoritesContext';
 import AddPhonePage from './pages/AddPhonePage';
 import CheckoutPage from './pages/CheckoutPage';
+import EditPhonePage from './pages/EditPhonePage';
 
 const AppContent = () => {
   const [currentPage, setCurrentPage] = useState('home');
   const [selectedPhone, setSelectedPhone] = useState(null);
   const [navigationHistory, setNavigationHistory] = useState(['home']);
+  const [navigationData, setNavigationData] = useState({}); 
   const { user } = useAuth();
 
-  const handleNavigation = (page) => {
+  // Updated navigation handler to accept data
+  const handleNavigation = (page, data = {}) => {
     if (page !== currentPage) {
       if (page === 'home') {
         // If navigating to home, reset history to just home
         setNavigationHistory(['home']);
+        setNavigationData({});
       } else {
         // Add new page to history
         setNavigationHistory(prev => [...prev, page]);
+        setNavigationData(data); // Store the navigation data
       }
       setCurrentPage(page);
     }
@@ -41,6 +46,7 @@ const AppContent = () => {
       
       setNavigationHistory(newHistory);
       setCurrentPage(previousPage);
+      setNavigationData({}); // Clear navigation data when going back
     }
   };
 
@@ -48,8 +54,8 @@ const AppContent = () => {
   const showBackButton = currentPage !== 'home' && navigationHistory.length > 1;
 
   // Update your existing navigation handler to use the new one
-  const handlePageNavigation = (page) => {
-    handleNavigation(page);
+  const handlePageNavigation = (page, data = {}) => {
+    handleNavigation(page, data);
   };
 
   useEffect(() => {
@@ -72,8 +78,17 @@ const AppContent = () => {
         return <PhonesPage onNavigate={handlePageNavigation} onPhoneSelect={setSelectedPhone} />;
       case 'add-phone':
         return <AddPhonePage onNavigate={handlePageNavigation} />;  
+      case 'edit-phone': // Add this case for edit phone page
+        return <EditPhonePage 
+          onNavigate={handlePageNavigation} 
+          phoneId={navigationData.phoneId} 
+        />;
       case 'details':
-        return <PhoneDetailsPage phone={selectedPhone} onNavigate={handlePageNavigation} />;
+        return <PhoneDetailsPage 
+          phone={selectedPhone} 
+          phoneId={navigationData.phoneId}
+          onNavigate={handlePageNavigation} 
+        />;
       case 'cart':  
         return <CartPage onNavigate={handlePageNavigation} />;
       case 'checkout': 

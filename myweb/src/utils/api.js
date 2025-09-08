@@ -84,7 +84,23 @@ export const phoneAPI = {
     },
   }),
   
-  updatePhone: (id, phoneData) => api.put(`/phones/${id}`, phoneData),
+  // ENHANCED UPDATE PHONE - Handles both FormData and JSON
+  updatePhone: (id, phoneData) => {
+    // Check if phoneData is FormData (contains new images)
+    if (phoneData instanceof FormData) {
+      return api.put(`/phones/${id}`, phoneData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+    }
+    // Regular JSON update (no new images)
+    return api.put(`/phones/${id}`, phoneData, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+  },
   
   deletePhone: (id) => api.delete(`/phones/${id}`),
   

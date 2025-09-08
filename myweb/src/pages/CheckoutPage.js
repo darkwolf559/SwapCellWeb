@@ -21,7 +21,7 @@ const districts = {
   'Western Province': ['Colombo', 'Gampaha', 'Kalutara'],
   'Central Province': ['Kandy', 'Matale', 'Nuwara Eliya'],
   'Southern Province': ['Galle', 'Matara', 'Hambantota'],
-  'Northern Province': ['Jaffna', 'Kilinochchi', 'Mannar'],
+  'Northern Province': ['Jaffna', 'Kilinochchi', 'Mannar','Mullaitivu','Vavuniya'],
   'Eastern Province': ['Trincomalee', 'Batticaloa', 'Ampara'],
   'North Western Province': ['Kurunegala', 'Puttalam'],
   'North Central Province': ['Anuradhapura', 'Polonnaruwa'],
@@ -30,8 +30,8 @@ const districts = {
 };
 
 const courierTypes = [
-  { id: 'courier', name: 'Standard Courier', price: 350, days: '3-5 business days' },
-  { id: 'speed_post', name: 'Speed Post', price: 750, days: '1-2 business days' }
+  { id: 'courier', name: 'Standard Courier', price: 1000, days: '3-5 business days' },
+  { id: 'speed_post', name: 'Speed Post', price: 1500, days: '1-2 business days' }
 ];
 
 const CheckoutPage = ({ onNavigate }) => {
@@ -72,11 +72,11 @@ const CheckoutPage = ({ onNavigate }) => {
       onNavigate('auth');
       return;
     }
-    if (cart.length === 0) {
+    if (cart.length === 0 && !success) {
       onNavigate('cart');
       return;
     }
-  }, [user, cart, onNavigate]);
+  }, [user, cart, onNavigate, success]);
 
   const subtotal = getCartTotal();
   const selectedCourier = courierTypes.find(c => c.id === formData.courierType) || courierTypes[0];
@@ -183,12 +183,16 @@ const CheckoutPage = ({ onNavigate }) => {
       setLoading(true);
       setError(null);
 
+      console.log('Starting order placement...');
+
       // Process payment (sandbox simulation)
+      console.log('Processing payment...');
       const paymentResult = await simulatePayment();
       
       if (!paymentResult.success) {
         throw new Error(paymentResult.message || 'Payment failed');
       }
+
 
       // Generate unique order number
       const generatedOrderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
@@ -226,12 +230,10 @@ const CheckoutPage = ({ onNavigate }) => {
         }
       };
 
-      console.log('Creating order with data:', orderData);
 
       // Create order
       const response = await orderAPI.createOrder(orderData);
       
-      console.log('Order API response:', response);
 
       // Handle different response formats
       let orderIdFromResponse;
@@ -243,12 +245,17 @@ const CheckoutPage = ({ onNavigate }) => {
         orderIdFromResponse = response.orderId || response._id || response.id;
       }
 
+      console.log('Order ID from response:', orderIdFromResponse);
+
       if (!orderIdFromResponse) {
-        throw new Error('Order was created but no order ID was returned');
+        console.warn('Order was created but no order ID was returned');
+        // Still consider it successful if we got a response
+        orderIdFromResponse = generatedOrderNumber; // Use order number as fallback
       }
 
       setOrderId(orderIdFromResponse);
       setOrderNumber(generatedOrderNumber);
+
 
       // Send confirmation email
       try {
@@ -260,7 +267,10 @@ const CheckoutPage = ({ onNavigate }) => {
 
       // Clear cart and show success
       await clearCart();
+      console.log('Cart cleared, setting success state...');
+      
       setSuccess(true);
+      console.log('Success state set to true');
 
     } catch (err) {
       console.error('Order placement failed:', err);
@@ -724,7 +734,18 @@ const CheckoutPage = ({ onNavigate }) => {
     </div>
   );
 
+  // Debug logging
+  console.log('CheckoutPage render - Current state:', {
+    success,
+    currentStep,
+    loading,
+    cart: cart.length,
+    orderNumber
+  });
+
+  // Early return for success page
   if (success) {
+    console.log('Rendering success page');
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 pt-24 pb-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -733,6 +754,8 @@ const CheckoutPage = ({ onNavigate }) => {
       </div>
     );
   }
+
+  console.log('Rendering checkout form');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 pt-24 pb-8">
@@ -793,6 +816,17 @@ const CheckoutPage = ({ onNavigate }) => {
               >
                 ×
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Overlay */}
+        {loading && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-gray-800 rounded-2xl p-8 border border-purple-500/20 text-center">
+              <Loader className="h-12 w-12 text-purple-400 animate-spin mx-auto mb-4" />
+              <h3 className="text-white text-lg font-semibold mb-2">Processing Your Order</h3>
+              <p className="text-gray-400">Please don't close this window...</p>
             </div>
           </div>
         )}

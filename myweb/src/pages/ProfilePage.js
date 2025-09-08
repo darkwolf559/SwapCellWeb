@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, ShoppingCart, Plus, Edit, Star, Eye, TrendingUp, DollarSign, Smartphone, Loader, AlertCircle, Camera, Upload, X, Check } from 'lucide-react';
-import PhoneCard from '../components/PhoneCard';
+import { User, ShoppingCart, Plus, Edit, Star, TrendingUp, DollarSign, Smartphone, Loader, AlertCircle, Camera, Upload, X, Check } from 'lucide-react';
 import { useAuth } from '../utils/AuthContext';
 import { phoneAPI, authAPI, orderAPI, analyticsAPI, apiUtils } from '../utils/api';
+import SellerListingsTab from '../components/SellerListingsTab';
 
 const ProfilePage = ({ onNavigate }) => {
   const { user, updateUser } = useAuth();
@@ -13,7 +13,6 @@ const ProfilePage = ({ onNavigate }) => {
     activeListings: 0,
     totalSold: 0,
     totalRevenue: 0,
-    totalViews: 0,
     ordersPlaced: 0,
     totalSpent: 0
   });
@@ -40,6 +39,8 @@ const ProfilePage = ({ onNavigate }) => {
       setLoading(true);
       setError(null);
 
+      console.log('Fetching profile data for user:', user);
+
       // Fetch profile data
       const profileResponse = await authAPI.getProfile();
       setProfileData(profileResponse.data);
@@ -47,16 +48,19 @@ const ProfilePage = ({ onNavigate }) => {
       if (user.role === 'seller') {
         // Fetch seller-specific data
         const [listingsResponse, salesResponse] = await Promise.all([
-          phoneAPI.getMyListings(),
+          phoneAPI.getMyListings().catch(err => {
+            console.error('Listings error:', err);
+            return { data: [] };
+          }),
           orderAPI.getMySales().catch(err => {
-            console.log('Sales endpoint error:', err);
+            console.error('Sales error:', err);
             return { data: [] };
           })
         ]);
 
         setListings(listingsResponse.data || []);
         
-        // Ensure sales is always an array
+        // Process sales data with better error handling
         let sales = [];
         if (salesResponse && salesResponse.data) {
           if (Array.isArray(salesResponse.data)) {
@@ -65,9 +69,12 @@ const ProfilePage = ({ onNavigate }) => {
             sales = salesResponse.data.orders;
           } else if (salesResponse.data.sales && Array.isArray(salesResponse.data.sales)) {
             sales = salesResponse.data.sales;
+          } else if (salesResponse.data.data && Array.isArray(salesResponse.data.data)) {
+            sales = salesResponse.data.data;
           }
         }
         
+        console.log('Processed sales data:', sales);
         setOrders(sales);
 
         // Calculate stats with proper array checks
@@ -80,15 +87,11 @@ const ProfilePage = ({ onNavigate }) => {
         const totalRevenue = Array.isArray(sales) 
           ? sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0)
           : 0;
-        const totalViews = Array.isArray(listingsData)
-          ? listingsData.reduce((sum, phone) => sum + (phone.views || 0), 0)
-          : 0;
 
         setStats({
           activeListings,
           totalSold,
-          totalRevenue,
-          totalViews
+          totalRevenue
         });
 
         // Try to fetch analytics if available
@@ -102,18 +105,31 @@ const ProfilePage = ({ onNavigate }) => {
         }
 
       } else {
-        // Fetch buyer-specific data
+        // Fetch buyer-specific data with enhanced error handling
+        console.log('Fetching orders for buyer...');
+        
         try {
           const ordersResponse = await orderAPI.getMyOrders();
+          console.log('Raw orders response:', ordersResponse);
+          
           let orderData = [];
           
-          if (ordersResponse && ordersResponse.data) {
-            if (Array.isArray(ordersResponse.data)) {
-              orderData = ordersResponse.data;
-            } else if (ordersResponse.data.orders && Array.isArray(ordersResponse.data.orders)) {
-              orderData = ordersResponse.data.orders;
+          if (ordersResponse) {
+            // Handle different response structures
+            if (ordersResponse.data) {
+              if (Array.isArray(ordersResponse.data)) {
+                orderData = ordersResponse.data;
+              } else if (ordersResponse.data.orders && Array.isArray(ordersResponse.data.orders)) {
+                orderData = ordersResponse.data.orders;
+              } else if (ordersResponse.data.data && Array.isArray(ordersResponse.data.data)) {
+                orderData = ordersResponse.data.data;
+              }
+            } else if (Array.isArray(ordersResponse)) {
+              orderData = ordersResponse;
             }
           }
+          
+          console.log('Processed order data:', orderData);
           
           setOrders(orderData);
           
@@ -125,8 +141,41 @@ const ProfilePage = ({ onNavigate }) => {
             ordersPlaced: orderData.length,
             totalSpent
           });
+
+          console.log('Set buyer stats:', {
+            ordersPlaced: orderData.length,
+            totalSpent
+          });
+
         } catch (orderError) {
-          console.log('Orders not available:', orderError);
+          console.error('Orders fetch error:', orderError);
+          
+          // More detailed error logging
+          if (orderError.response) {
+            console.error('Orders API response error:', {
+              status: orderError.response.status,
+              data: orderError.response.data,
+              headers: orderError.response.headers
+            });
+            
+            // Set specific error based on status code
+            if (orderError.response.status === 404) {
+              setError('Orders endpoint not found. Please check API configuration.');
+            } else if (orderError.response.status === 401) {
+              setError('Authentication failed. Please log in again.');
+            } else if (orderError.response.status === 403) {
+              setError('Access denied. Insufficient permissions.');
+            } else {
+              setError(`Server error (${orderError.response.status}): ${orderError.response.data?.message || 'Unknown error'}`);
+            }
+          } else if (orderError.request) {
+            console.error('Orders network error:', orderError.request);
+            setError('Network error. Please check your connection and try again.');
+          } else {
+            console.error('Orders general error:', orderError.message);
+            setError(`Failed to fetch orders: ${orderError.message}`);
+          }
+          
           setOrders([]);
           setStats({
             ordersPlaced: 0,
@@ -137,14 +186,21 @@ const ProfilePage = ({ onNavigate }) => {
 
     } catch (err) {
       console.error('Failed to fetch profile data:', err);
-      setError(apiUtils.handleError(err));
+      
+      // Enhanced error handling
+      let errorMessage = 'Failed to load profile data';
+      if (err.response) {
+        errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
+      } else if (err.request) {
+        errorMessage = 'Network error. Please check your connection.';
+      } else {
+        errorMessage = err.message || 'Unknown error occurred';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handlePhoneSelect = (phone) => {
-    onNavigate('details');
   };
 
   const handleProfilePhotoClick = () => {
@@ -391,12 +447,11 @@ const ProfilePage = ({ onNavigate }) => {
 
       {/* Stats Cards */}
       {user.role === 'seller' ? (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
             { icon: TrendingUp, value: stats.activeListings, label: 'Active Listings', gradient: 'from-green-400 to-emerald-600', delay: '0s' },
             { icon: ShoppingCart, value: stats.totalSold, label: 'Total Sold', gradient: 'from-blue-400 to-cyan-600', delay: '0.2s' },
             { icon: DollarSign, value: `LKR ${stats.totalRevenue.toLocaleString()}`, label: 'Total Revenue', gradient: 'from-purple-400 to-pink-600', delay: '0.4s' },
-
           ].map((stat, index) => (
             <div key={index} className="group relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 text-center shadow-2xl border border-gray-700/50 hover:border-gray-600/50 transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 animate-slide-up" 
                  style={{ animationDelay: stat.delay }}>
@@ -430,60 +485,58 @@ const ProfilePage = ({ onNavigate }) => {
     </div>
   );
 
-  const ListingsTab = () => (
-    <div className="animate-slide-up">
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-          My Listings
-        </h2>
-        <button 
-          onClick={() => onNavigate('add-phone')}
-          className="group relative bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 hover:from-cyan-400 hover:via-purple-400 hover:to-pink-400 text-white px-6 py-3 rounded-2xl font-medium transition-all duration-500 flex items-center shadow-2xl shadow-purple-500/25 transform hover:scale-105 hover:-translate-y-1 overflow-hidden"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-          <Plus className="h-5 w-5 mr-3 relative z-10" />
-          <span className="relative z-10">Add New Phone</span>
-        </button>
-      </div>
-      
-      {loading ? (
-        <div className="text-center py-20">
-          <Loader className="h-16 w-16 text-purple-500 mx-auto mb-4 animate-spin" />
-          <p className="text-gray-400 text-xl">Loading your listings...</p>
-        </div>
-      ) : listings.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {listings.map((phone, index) => (
-            <div key={phone._id} className="relative group animate-slide-up" style={{ animationDelay: `${index * 0.2}s` }}>
-              <div className="transform hover:scale-105 transition-all duration-500">
-                <PhoneCard
-                  phone={phone}
-                  onViewDetails={handlePhoneSelect}
-                  showAnimation={false}
-                />
-              </div>
-              <button className="absolute top-4 right-16 bg-gradient-to-br from-gray-800 to-gray-900 hover:from-purple-600 hover:to-pink-600 p-3 rounded-full shadow-2xl border border-gray-700/50 hover:border-purple-500/50 transition-all duration-500 transform hover:scale-110 hover:-translate-y-1 group-hover:shadow-purple-500/25">
-                <Edit className="h-5 w-5 text-gray-300 hover:text-white transition-colors" />
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-20 bg-gray-800/20 backdrop-blur-lg rounded-3xl border border-gray-700/30">
-          <Smartphone className="h-24 w-24 text-gray-600 mx-auto mb-6" />
-          <h3 className="text-2xl font-bold text-gray-300 mb-4">No listings yet</h3>
-          <p className="text-gray-500 mb-8">Start selling by adding your first phone</p>
-          <button
-            onClick={() => onNavigate('add-phone')}
-            className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-105"
-          >
-            <Plus className="inline h-5 w-5 mr-2" />
-            Add Your First Phone
-          </button>
-        </div>
-      )}
-    </div>
-  );
+  const ListingsTab = () => {
+    const handleViewDetails = (phone) => {
+      // Navigate to phone details page
+      onNavigate('details', { phoneId: phone._id });
+    };
+
+    const handleEdit = (phone) => {
+      // Navigate to edit phone page
+      onNavigate('edit-phone', { phoneId: phone._id });
+    };
+
+    const handleDelete = async (phone) => {
+      if (window.confirm(`Are you sure you want to delete "${phone.title}"?\n\nThis action cannot be undone.`)) {
+        try {
+          setError(null);
+          await phoneAPI.deletePhone(phone._id);
+          
+          // Remove from local state immediately for better UX
+          setListings(prev => prev.filter(p => p._id !== phone._id));
+          
+          // Update stats
+          setStats(prev => ({
+            ...prev,
+            activeListings: prev.activeListings - (phone.isAvailable ? 1 : 0)
+          }));
+          
+          console.log('Phone deleted successfully');
+        } catch (err) {
+          console.error('Failed to delete phone:', err);
+          setError(apiUtils.handleError(err));
+          // Refresh data on error to ensure consistency
+          fetchProfileData();
+        }
+      }
+    };
+
+    const handleAddNew = () => {
+      onNavigate('add-phone');
+    };
+
+    return (
+      <SellerListingsTab
+        listings={listings}
+        loading={loading}
+        error={error}
+        onViewDetails={handleViewDetails}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onAddNew={handleAddNew}
+      />
+    );
+  };
 
   const OrdersTab = () => (
     <div className="animate-slide-up">
@@ -530,7 +583,7 @@ const ProfilePage = ({ onNavigate }) => {
                     <div className="flex items-center">
                       <div className="relative">
                         <img
-                          src={order.phone?.images?.[0] || order.phoneImage || '/api/placeholder/64/64'}
+                          src={order.items?.[0]?.phoneId?.images?.[0] || order.items?.[0]?.image || order.phone?.images?.[0] || order.phoneImage || '/api/placeholder/64/64'}
                           alt="Phone"
                           className="w-16 h-16 object-cover rounded-xl shadow-lg"
                           onError={(e) => {
@@ -540,8 +593,15 @@ const ProfilePage = ({ onNavigate }) => {
                         <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                       </div>
                       <div className="ml-6">
-                        <h4 className="font-semibold text-white text-lg">{order.phone?.title || order.phoneTitle || 'Phone'}</h4>
-                        <p className="text-gray-400">Quantity: {order.quantity || 1}</p>
+                        <h4 className="font-semibold text-white text-lg">
+                          {order.items?.[0]?.phoneId?.title || order.items?.[0]?.title || order.phone?.title || order.phoneTitle || 'Phone'}
+                        </h4>
+                        <p className="text-gray-400">
+                          Quantity: {order.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || order.quantity || 1}
+                        </p>
+                        {order.items && order.items.length > 1 && (
+                          <p className="text-gray-400 text-sm">+ {order.items.length - 1} more item{order.items.length > 2 ? 's' : ''}</p>
+                        )}
                       </div>
                     </div>
                     <span className="font-bold text-2xl bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">

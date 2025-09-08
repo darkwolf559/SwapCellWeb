@@ -15,17 +15,29 @@ const getIO = () => {
   }
 };
 
-// Email configuration
+// Email configuration with better error handling
 const createEmailTransporter = () => {
-  return nodemailer.createTransporter({
+  const config = {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: process.env.SMTP_PORT || 587,
-    secure: false,
+    port: parseInt(process.env.SMTP_PORT) || 587,
+    secure: false, // true for 465, false for other ports
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
+    },
+    tls: {
+      rejectUnauthorized: false // For development only
     }
+  };
+
+  console.log('Email config:', {
+    host: config.host,
+    port: config.port,
+    user: config.auth.user ? '***@' + config.auth.user.split('@')[1] : 'NOT SET',
+    pass: config.auth.pass ? 'SET' : 'NOT SET'
   });
+
+  return nodemailer.createTransport(config);
 };
 
 const createOrder = async (req, res) => {
@@ -178,34 +190,79 @@ const sendOrderConfirmation = async (req, res) => {
   try {
     const { orderId, email } = req.body;
 
+    console.log('📧 Attempting to send confirmation email...');
+    console.log('Order ID:', orderId);
+    console.log('Email:', email);
+    console.log('User ID:', req.user.userId);
+
     if (!orderId || !email) {
       return res.status(400).json({ 
         message: 'Order ID and email are required' 
       });
     }
 
-    // Get order details
-const order = await Order.findById(orderId)
-  .populate({
-    path: 'items.phoneId',
-    select: 'title brand images price'
-  })
-  .populate('userId', 'name email')
-  .maxTimeMS(30000)
-  .exec();
+    // Test MongoDB connection first
+    try {
+      console.log('🔍 Testing MongoDB connection...');
+      const connectionState = require('mongoose').connection.readyState;
+      console.log('MongoDB connection state:', connectionState); // 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
+      
+      if (connectionState !== 1) {
+        throw new Error(`MongoDB not connected. State: ${connectionState}`);
+      }
+    } catch (dbError) {
+      console.error('❌ MongoDB connection error:', dbError);
+      return res.status(500).json({ 
+        success: false,
+        message: 'Database connection error',
+        error: dbError.message 
+      });
+    }
+
+    // Get order details with increased timeout and better error handling
+    console.log('📦 Fetching order details...');
+    const order = await Order.findById(orderId)
+      .populate({
+        path: 'items.phoneId',
+        select: 'title brand images price'
+      })
+      .populate('userId', 'name email')
+      .maxTimeMS(30000) // 30 seconds timeout
+      .lean() // Use lean() for better performance
+      .exec();
 
     if (!order) {
+      console.error('❌ Order not found:', orderId);
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    console.log('✅ Order found:', order.orderNumber);
+
     // Verify user owns the order
     if (order.userId._id.toString() !== req.user.userId) {
+      console.error('❌ Unauthorized access to order');
       return res.status(403).json({ message: 'Unauthorized access to order' });
     }
 
+    // Test email configuration
+    console.log('📧 Testing email configuration...');
     const transporter = createEmailTransporter();
+    
+    // Verify transporter configuration
+    try {
+      await transporter.verify();
+      console.log('✅ Email transporter verified successfully');
+    } catch (verifyError) {
+      console.error('❌ Email transporter verification failed:', verifyError);
+      return res.status(500).json({ 
+        success: false,
+        message: 'Email configuration error',
+        error: verifyError.message 
+      });
+    }
 
     // Generate email HTML
+    console.log('📝 Generating email content...');
     const emailHTML = generateOrderConfirmationEmail(order);
 
     const mailOptions = {
@@ -215,20 +272,38 @@ const order = await Order.findById(orderId)
       html: emailHTML
     };
 
-    await transporter.sendMail(mailOptions);
-
-    console.log(`Confirmation email sent for order: ${order.orderNumber}`);
+    console.log('📤 Sending email to:', email);
+    const emailResult = await transporter.sendMail(mailOptions);
+    console.log('✅ Email sent successfully:', emailResult.messageId);
 
     res.json({ 
       success: true,
-      message: 'Confirmation email sent successfully' 
+      message: 'Confirmation email sent successfully',
+      messageId: emailResult.messageId
     });
   } catch (err) {
-    console.error('Email sending error:', err);
-    res.status(500).json({ 
+    console.error('❌ Email sending error:', err);
+    
+    // More specific error handling
+    let errorMessage = 'Failed to send confirmation email';
+    let errorCode = 500;
+    
+    if (err.name === 'CastError') {
+      errorMessage = 'Invalid order ID format';
+      errorCode = 400;
+    } else if (err.name === 'MongooseError' && err.message.includes('buffering timed out')) {
+      errorMessage = 'Database connection timeout. Please try again.';
+      errorCode = 503; // Service Unavailable
+    } else if (err.code === 'EAUTH' || err.code === 'ECONNECTION') {
+      errorMessage = 'Email service configuration error';
+      errorCode = 502; // Bad Gateway
+    }
+    
+    res.status(errorCode).json({ 
       success: false,
-      message: 'Failed to send confirmation email',
-      error: err.message 
+      message: errorMessage,
+      error: err.message,
+      errorCode: err.code || 'UNKNOWN'
     });
   }
 };
@@ -299,24 +374,24 @@ const generateOrderConfirmationEmail = (order) => {
                     ${order.deliveryAddress.otherMobile ? `<p><strong>Alternative Phone:</strong> ${order.deliveryAddress.otherMobile}</p>` : ''}
                     <p><strong>Email:</strong> ${order.deliveryAddress.email}</p>
                 </div>
+<div class="items-list">
+  <h3 style="color: #333;">Items Ordered</h3>
+  ${order.items.map(item => `
+      <div class="item">
+          <img src="${item.phoneId.images && item.phoneId.images[0] ? item.phoneId.images[0] : '/api/placeholder/60/60'}" 
+               alt="${item.phoneId.title}" class="item-image">
+          <div class="item-details">
+              <div class="item-title">${item.phoneId.title}</div>
+              <div>Brand: ${item.phoneId.brand}</div>
+              <div>Quantity: ${item.quantity}</div>
+          </div>
+          <div class="item-price">
+              LKR ${(item.price * item.quantity).toLocaleString()}
+          </div>
+      </div>
+  `).join('')}
+</div>
 
-                <div class="items-list">
-                    <h3 style="color: #333;">Items Ordered</h3>
-                    ${order.items.map(item => `
-                        <div class="item">
-                            <img src="${item.phoneId.images && item.phoneId.images[0] ? item.phoneId.images[0] : '/api/placeholder/60/60'}" 
-                                 alt="${item.phoneId.title}" class="item-image">
-                            <div class="item-details">
-                                <div class="item-title">${item.phoneId.title}</div>
-                                <div>Brand: ${item.phoneId.brand}</div>
-                                <div>Quantity: ${item.quantity}</div>
-                            </div>
-                            <div class="item-price">
-                                LKR ${(item.price * item.quantity).toLocaleString()}
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
 
                 <div class="total-section">
                     <h3 style="margin-top: 0; color: #333;">Order Summary</h3>
@@ -349,7 +424,7 @@ const generateOrderConfirmationEmail = (order) => {
 
             <div class="footer">
                 <p>Thank you for choosing Phone Marketplace!</p>
-                <p>If you have any questions, please contact us at support@phonemarketplace.com</p>
+                <p>If you have any questions, please contact us at support@swapcellstore.lk</p>
                 <p style="font-size: 12px; color: #999;">
                     This is an automated email. Please do not reply directly to this message.
                 </p>
@@ -360,6 +435,7 @@ const generateOrderConfirmationEmail = (order) => {
   `;
 };
 
+// ... rest of your existing functions (myOrders, mySales, getOrderDetails, updateOrderStatus)
 const myOrders = async (req, res) => {
   try {
     const orders = await Order.find({ userId: req.user.userId })

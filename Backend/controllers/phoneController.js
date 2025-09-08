@@ -202,32 +202,70 @@ const deletePhone = async (req, res) => {
 
 // Update phone
 const updatePhone = async (req, res) => {
-  try {
-    if (req.user.role !== 'seller') return res.status(403).json({ message: 'Only sellers can update listings' });
-
-    const phone = await Phone.findById(req.params.id);
-    if (!phone) return res.status(404).json({ message: 'Phone not found' });
-
-    // Check if user owns this phone
-    if (phone.sellerId.toString() !== req.user.userId) {
-      return res.status(403).json({ message: 'You can only update your own listings' });
+  uploadImages(req, res, async (err) => {
+    if (err && err.code !== 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ message: 'File upload error', error: err.message });
     }
 
-    const updateData = { ...req.body };
-    if (updateData.specs && typeof updateData.specs === 'string') {
-      updateData.specs = JSON.parse(updateData.specs);
+    try {
+      if (req.user.role !== 'seller') {
+        return res.status(403).json({ message: 'Only sellers can update listings' });
+      }
+
+      const phone = await Phone.findById(req.params.id);
+      if (!phone) {
+        return res.status(404).json({ message: 'Phone not found' });
+      }
+
+      if (phone.sellerId.toString() !== req.user.userId) {
+        return res.status(403).json({ message: 'You can only update your own listings' });
+      }
+
+      const updateData = { ...req.body };
+      
+      // Handle specs
+      if (updateData.specs && typeof updateData.specs === 'string') {
+        updateData.specs = JSON.parse(updateData.specs);
+      }
+
+      // Handle images
+      let finalImages = [];
+      
+      // Keep existing images if provided
+      if (updateData.existingImages) {
+        const existingImages = JSON.parse(updateData.existingImages);
+        finalImages = [...existingImages];
+      }
+      
+      // Add new uploaded images
+      if (req.files && req.files.length > 0) {
+        const newImages = req.files.map(file => file.path);
+        finalImages = [...finalImages, ...newImages];
+      }
+      
+      if (finalImages.length > 0) {
+        updateData.images = finalImages;
+      }
+      
+      // Clean up form data fields
+      delete updateData.existingImages;
+
+      const updatedPhone = await Phone.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true, runValidators: true }
+      ).populate('sellerId', 'name phone rating reviewCount profilePicture');
+
+      res.json({ 
+        message: 'Phone updated successfully', 
+        phone: updatedPhone 
+      });
+      
+    } catch (err) {
+      console.error('Update phone error:', err);
+      res.status(500).json({ message: 'Server error', error: err.message });
     }
-
-    const updatedPhone = await Phone.findByIdAndUpdate(
-      req.params.id, 
-      updateData, 
-      { new: true }
-    ).populate('sellerId', 'name phone rating reviewCount profilePicture');
-
-    res.json({ message: 'Phone updated successfully', phone: updatedPhone });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
+  });
 };
 
 module.exports = { 
