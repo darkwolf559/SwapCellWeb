@@ -119,7 +119,7 @@ const SpecificationGrid = ({ specs }) => {
               { name: 'Face ID', color: 'from-blue-400 to-purple-400' },
               { name: 'Wireless Charging', color: 'from-green-400 to-blue-400' },
               { name: 'Water Resistant', color: 'from-cyan-400 to-teal-400' },
-              { name: '5G Ready', color: 'from-purple-400 to-pink-400' },
+              { name: '4G Ready', color: 'from-purple-400 to-pink-400' },
               { name: 'Night Mode', color: 'from-indigo-400 to-purple-400' },
               { name: 'Fast Charging', color: 'from-yellow-400 to-red-400' }
             ].map((feature, index) => (

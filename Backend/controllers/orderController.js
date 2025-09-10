@@ -26,7 +26,7 @@ const createEmailTransporter = () => {
       pass: process.env.SMTP_PASS
     },
     tls: {
-      rejectUnauthorized: false // For development only
+      rejectUnauthorized: false 
     }
   };
 
@@ -377,18 +377,18 @@ const generateOrderConfirmationEmail = (order) => {
 <div class="items-list">
   <h3 style="color: #333;">Items Ordered</h3>
   ${order.items.map(item => `
-      <div class="item">
-          <img src="${item.phoneId.images && item.phoneId.images[0] ? item.phoneId.images[0] : '/api/placeholder/60/60'}" 
-               alt="${item.phoneId.title}" class="item-image">
-          <div class="item-details">
-              <div class="item-title">${item.phoneId.title}</div>
-              <div>Brand: ${item.phoneId.brand}</div>
-              <div>Quantity: ${item.quantity}</div>
-          </div>
-          <div class="item-price">
-              LKR ${(item.price * item.quantity).toLocaleString()}
-          </div>
-      </div>
+<div class="item">
+    <img src="${item.phoneId.images && item.phoneId.images[0] ? item.phoneId.images[0] : '/api/placeholder/60/60'}" 
+         alt="${item.phoneId.title}" class="item-image">
+    <div class="item-details" style="flex: 1;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="item-title">${item.phoneId.title}</div>
+        </div>
+        <div>Brand: ${item.phoneId.brand}</div>
+        <div>Quantity: ${item.quantity}</div>
+    </div>
+</div>
+
   `).join('')}
 </div>
 
@@ -423,8 +423,8 @@ const generateOrderConfirmationEmail = (order) => {
             </div>
 
             <div class="footer">
-                <p>Thank you for choosing Phone Marketplace!</p>
-                <p>If you have any questions, please contact us at support@swapcellstore.lk</p>
+                <p>Thank you for choosing SwapCell Phone Marketplace!</p>
+                <p>If you have any questions, please contact us at swapcellstore@gmail.com</p>
                 <p style="font-size: 12px; color: #999;">
                     This is an automated email. Please do not reply directly to this message.
                 </p>

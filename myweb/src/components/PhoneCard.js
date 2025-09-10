@@ -2,10 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Heart, MapPin, Clock, Eye, ShoppingCart, Cpu } from 'lucide-react';
 import { useCart } from '../utils/CartContext';
 import { useFavorites } from '../utils/FavoritesContext';
+import { useAuth } from '../utils/AuthContext'; // Add this import
 
 const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
   const { addToCart } = useCart();
   const { favorites, toggleFavorite } = useFavorites();
+  const { user } = useAuth(); // Add this line
   const [isHovered, setIsHovered] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [glitchEffect, setGlitchEffect] = useState(false);
@@ -76,6 +78,14 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
   };
 
   const isStarred = favorites.includes(phone._id || phone.id);
+
+  // Check if current user is the seller of this phone
+  const isOwnPhone = user && phone.sellerId && (
+    phone.sellerId._id === user.id || 
+    phone.sellerId._id === user.userId ||
+    phone.sellerId === user.id ||
+    phone.sellerId === user.userId
+  );
 
   // Format the posted time
   const formatPostedTime = (dateString) => {
@@ -160,6 +170,13 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
           {phone.condition && (
             <div className="absolute top-4 left-4 px-3 py-1 bg-green-500/80 backdrop-blur-lg text-white text-xs font-semibold rounded-full border border-green-400/50">
               {phone.condition}
+            </div>
+          )}
+
+          {/* Your Phone Badge - Show if user owns this phone */}
+          {isOwnPhone && (
+            <div className="absolute bottom-4 right-4 px-3 py-1 bg-blue-500/80 backdrop-blur-lg text-white text-xs font-semibold rounded-full border border-blue-400/50 z-10">
+              Your Phone
             </div>
           )}
           
@@ -272,15 +289,24 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
               </span>
             </button>
             
-            <button
-              onClick={handleAddToCart}
-              className="relative group bg-gray-700/50 hover:bg-gradient-to-r hover:from-green-500 hover:to-teal-500 
-                         text-gray-300 hover:text-white py-3 px-4 rounded-2xl font-semibold transition-all duration-300 
-                         transform hover:scale-110 hover:shadow-lg hover:shadow-green-500/50 backdrop-blur-sm border border-gray-600 hover:border-green-400"
-            >
-              <ShoppingCart className={`h-5 w-5 transition-all ${glitchEffect ? 'animate-bounce' : ''}`} />
-              <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl blur-lg opacity-0 group-hover:opacity-50 transition-opacity" />
-            </button>
+            {/* Conditionally render Add to Cart button */}
+            {!isOwnPhone ? (
+              <button
+                onClick={handleAddToCart}
+                className="relative group bg-gray-700/50 hover:bg-gradient-to-r hover:from-green-500 hover:to-teal-500 
+                           text-gray-300 hover:text-white py-3 px-4 rounded-2xl font-semibold transition-all duration-300 
+                           transform hover:scale-110 hover:shadow-lg hover:shadow-green-500/50 backdrop-blur-sm border border-gray-600 hover:border-green-400"
+              >
+                <ShoppingCart className={`h-5 w-5 transition-all ${glitchEffect ? 'animate-bounce' : ''}`} />
+                <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl blur-lg opacity-0 group-hover:opacity-50 transition-opacity" />
+              </button>
+            ) : (
+              <div className="relative group bg-gray-600/30 text-gray-500 py-3 px-4 rounded-2xl font-semibold 
+                             backdrop-blur-sm border border-gray-600/50 cursor-not-allowed flex items-center justify-center"
+                   title="You cannot add your own phone to cart">
+                <ShoppingCart className="h-5 w-5 opacity-50" />
+              </div>
+            )}
           </div>
         </div>
 

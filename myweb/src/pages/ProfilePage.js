@@ -485,58 +485,62 @@ const ProfilePage = ({ onNavigate }) => {
     </div>
   );
 
-  const ListingsTab = () => {
-    const handleViewDetails = (phone) => {
-      // Navigate to phone details page
-      onNavigate('details', { phoneId: phone._id });
-    };
-
-    const handleEdit = (phone) => {
-      // Navigate to edit phone page
-      onNavigate('edit-phone', { phoneId: phone._id });
-    };
-
-    const handleDelete = async (phone) => {
-      if (window.confirm(`Are you sure you want to delete "${phone.title}"?\n\nThis action cannot be undone.`)) {
-        try {
-          setError(null);
-          await phoneAPI.deletePhone(phone._id);
-          
-          // Remove from local state immediately for better UX
-          setListings(prev => prev.filter(p => p._id !== phone._id));
-          
-          // Update stats
-          setStats(prev => ({
-            ...prev,
-            activeListings: prev.activeListings - (phone.isAvailable ? 1 : 0)
-          }));
-          
-          console.log('Phone deleted successfully');
-        } catch (err) {
-          console.error('Failed to delete phone:', err);
-          setError(apiUtils.handleError(err));
-          // Refresh data on error to ensure consistency
-          fetchProfileData();
-        }
-      }
-    };
-
-    const handleAddNew = () => {
-      onNavigate('add-phone');
-    };
-
-    return (
-      <SellerListingsTab
-        listings={listings}
-        loading={loading}
-        error={error}
-        onViewDetails={handleViewDetails}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onAddNew={handleAddNew}
-      />
-    );
+const ListingsTab = () => {
+  const handleViewDetails = (phone) => {
+    console.log('=== ProfilePage handleViewDetails Debug ===');
+    console.log('Phone object received:', phone);
+    console.log('Phone ID:', phone._id);
+    
+    // Pass the full phone object instead of just the ID
+    onNavigate('details', { phone: phone }); // Change this line
   };
+
+  const handleEdit = (phone) => {
+    // Navigate to edit phone page
+    onNavigate('edit-phone', { phoneId: phone._id });
+  };
+
+  const handleDelete = async (phone) => {
+    if (window.confirm(`Are you sure you want to delete "${phone.title}"?\n\nThis action cannot be undone.`)) {
+      try {
+        setError(null);
+        await phoneAPI.deletePhone(phone._id);
+        
+        // Remove from local state immediately for better UX
+        setListings(prev => prev.filter(p => p._id !== phone._id));
+        
+        // Update stats
+        setStats(prev => ({
+          ...prev,
+          activeListings: prev.activeListings - (phone.isAvailable ? 1 : 0)
+        }));
+        
+        console.log('Phone deleted successfully');
+      } catch (err) {
+        console.error('Failed to delete phone:', err);
+        setError(apiUtils.handleError(err));
+        // Refresh data on error to ensure consistency
+        fetchProfileData();
+      }
+    }
+  };
+
+  const handleAddNew = () => {
+    onNavigate('add-phone');
+  };
+
+  return (
+    <SellerListingsTab
+      listings={listings}
+      loading={loading}
+      error={error}
+      onViewDetails={handleViewDetails}
+      onEdit={handleEdit}
+      onDelete={handleDelete}
+      onAddNew={handleAddNew}
+    />
+  );
+};
 
   const OrdersTab = () => (
     <div className="animate-slide-up">

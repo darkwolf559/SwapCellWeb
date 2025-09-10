@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Smartphone, Eye, EyeOff, User, Mail, Lock, Phone, ShoppingCart, Zap, Stars, Cpu } from 'lucide-react';
 import { useAuth } from '../utils/AuthContext';
 
@@ -7,7 +7,6 @@ const AuthPage = ({ onNavigate }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,15 +16,6 @@ const AuthPage = ({ onNavigate }) => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState('');
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
 
   const handleInputChange = (e) => {
     setFormData({
@@ -39,7 +29,6 @@ const handleSubmit = async (e) => {
   setIsLoading(true);
   setError(null);
 
-  // ✅ Simple email validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(formData.email)) {
     setError("Please enter a valid email address");
@@ -76,35 +65,52 @@ const handleSubmit = async (e) => {
     });
   };
 
-  // Floating particles component
-  const FloatingParticles = () => (
+  // Floating mobile phones component
+  const FloatingMobiles = () => (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {[...Array(20)].map((_, i) => (
+      {/* Floating mobile phones */}
+      {[...Array(12)].map((_, i) => (
         <div
-          key={i}
-          className="absolute w-2 h-2 bg-gradient-to-r from-cyan-400 to-purple-400 rounded-full opacity-60 animate-pulse"
+          key={`mobile-${i}`}
+          className="absolute opacity-30"
           style={{
             left: `${Math.random() * 100}%`,
             top: `${Math.random() * 100}%`,
-            animationDelay: `${Math.random() * 3}s`,
-            animationDuration: `${3 + Math.random() * 4}s`
+            fontSize: `${25 + Math.random() * 35}px`,
+            color: i % 3 === 0 ? '#60a5fa' : i % 3 === 1 ? '#ec4899' : '#a78bfa',
+            animation: `floatMobile${i % 4} ${12 + Math.random() * 8}s ease-in-out infinite`,
+            animationDelay: `${Math.random() * 5}s`,
+            transform: `rotate(${Math.random() * 360}deg)`
+          }}
+        >
+          <Smartphone />
+        </div>
+      ))}
+      
+      {/* Twinkling stars */}
+      {[...Array(20)].map((_, i) => (
+        <div
+          key={`star-${i}`}
+          className="absolute w-1 h-1 bg-white rounded-full opacity-70"
+          style={{
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            animation: `twinkle ${2 + Math.random() * 3}s ease-in-out infinite`,
+            animationDelay: `${Math.random() * 3}s`
           }}
         />
       ))}
     </div>
   );
 
-  // Animated background gradients
+  // Enhanced animated background
   const AnimatedBg = () => (
     <div className="fixed inset-0 overflow-hidden">
-      <div 
-        className="absolute inset-0 opacity-30"
-        style={{
-          background: `radial-gradient(circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(59, 130, 246, 0.3) 0%, transparent 50%)`
-        }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900" style={{ animation: 'gradient-x 15s ease infinite' }} />
-      <div className="absolute inset-0 bg-gradient-to-tr from-pink-500/20 via-transparent to-cyan-500/20 animate-pulse" />
+      <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900" style={{ animation: 'gradientShift 15s ease infinite' }} />
+
+      <div className="absolute inset-0 bg-gradient-to-tr from-pink-500/20 via-transparent to-cyan-500/20" style={{ animation: 'gradientRotate 25s linear infinite' }} />
+
+      <div className="absolute inset-0 bg-gradient-to-bl from-transparent via-purple-500/10 to-transparent" style={{ animation: 'gradientFloat 20s ease-in-out infinite' }} />
     </div>
   );
 
@@ -112,9 +118,55 @@ const handleSubmit = async (e) => {
     <>
       <style>
         {`
-          @keyframes gradient-x {
+          @keyframes gradientShift {
             0%, 100% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
+          }
+          @keyframes gradientRotate {
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(180deg) scale(1.1); }
+            100% { transform: rotate(360deg) scale(1); }
+          }
+          @keyframes gradientFloat {
+            0%, 100% { transform: translateY(0px) translateX(0px); }
+            33% { transform: translateY(-20px) translateX(10px); }
+            66% { transform: translateY(10px) translateX(-10px); }
+          }
+          @keyframes floatMobile0 {
+            0%, 100% { transform: translate(0px, 0px) rotate(0deg) scale(1); }
+            25% { transform: translate(50px, -40px) rotate(90deg) scale(1.2); }
+            50% { transform: translate(-30px, -60px) rotate(180deg) scale(0.8); }
+            75% { transform: translate(-50px, 30px) rotate(270deg) scale(1.1); }
+          }
+          @keyframes floatMobile1 {
+            0%, 100% { transform: translate(0px, 0px) rotate(45deg) scale(1); }
+            25% { transform: translate(-45px, 50px) rotate(135deg) scale(0.9); }
+            50% { transform: translate(40px, 45px) rotate(225deg) scale(1.3); }
+            75% { transform: translate(55px, -35px) rotate(315deg) scale(0.7); }
+          }
+          @keyframes floatMobile2 {
+            0%, 100% { transform: translate(0px, 0px) rotate(90deg) scale(1); }
+            33% { transform: translate(35px, 55px) rotate(180deg) scale(1.1); }
+            66% { transform: translate(-40px, -45px) rotate(270deg) scale(0.9); }
+          }
+          @keyframes floatMobile3 {
+            0%, 100% { transform: translate(0px, 0px) rotate(-45deg) scale(1); }
+            20% { transform: translate(60px, 25px) rotate(45deg) scale(1.2); }
+            40% { transform: translate(35px, -50px) rotate(135deg) scale(0.8); }
+            60% { transform: translate(-35px, -40px) rotate(225deg) scale(1.1); }
+            80% { transform: translate(-55px, 45px) rotate(315deg) scale(0.9); }
+          }
+          @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.5); }
+          }
+          @keyframes borderFlow {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+          }
+          @keyframes borderFlowVertical {
+            0% { background-position: center -200%; }
+            100% { background-position: center 200%; }
           }
           @keyframes spin-slow {
             from { transform: rotate(0deg); }
@@ -140,24 +192,13 @@ const handleSubmit = async (e) => {
             from { opacity: 0; }
             to { opacity: 1; }
           }
-          @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-          }
-          .animate-gradient-x { animation: gradient-x 15s ease infinite; }
-          .animate-spin-slow { animation: spin-slow 3s linear infinite; }
-          .animate-slide-in-left { animation: slide-in-left 0.6s ease-out; }
-          .animate-slide-in-right { animation: slide-in-right 0.6s ease-out; }
-          .animate-fade-in-up { animation: fade-in-up 0.8s ease-out; }
-          .animate-slide-up { animation: slide-up 0.6s ease-out 0.2s both; }
-          .animate-fade-in { animation: fade-in 0.8s ease-out; }
-          .animate-shimmer { animation: shimmer 2s infinite; }
         `}
       </style>
       
-      <div className="min-h-screen relative overflow-hidden flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      {/* Added pt-20 to account for navigation bar */}
+      <div className="min-h-screen relative overflow-hidden flex items-center justify-center py-20 px-4 sm:px-6 lg:px-8">
         <AnimatedBg />
-        <FloatingParticles />
+        <FloatingMobiles />
         
         {/* Main container with advanced animations */}
         <div className="relative z-10 max-w-md w-full">
@@ -167,8 +208,48 @@ const handleSubmit = async (e) => {
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 50px rgba(59, 130, 246, 0.3)'
             }}
           >
-            {/* Glowing border effect */}
+            {/* Glowing border effect with animated blue/pink edges */}
             <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 opacity-75 blur-sm -z-10 animate-pulse" />
+            
+            {/* Animated moving borders */}
+            <div className="absolute inset-0 rounded-3xl overflow-hidden -z-10">
+              {/* Top border */}
+              <div 
+                className="absolute top-0 left-0 right-0 h-0.5 opacity-80"
+                style={{
+                  background: 'linear-gradient(90deg, transparent, #3b82f6, #06b6d4, #3b82f6, transparent)',
+                  backgroundSize: '200% 100%',
+                  animation: 'borderFlow 3s linear infinite'
+                }}
+              />
+              {/* Right border */}
+              <div 
+                className="absolute top-0 right-0 bottom-0 w-0.5 opacity-80"
+                style={{
+                  background: 'linear-gradient(180deg, transparent, #3b82f6, #ec4899, #3b82f6, transparent)',
+                  backgroundSize: '100% 200%',
+                  animation: 'borderFlowVertical 3s linear infinite'
+                }}
+              />
+              {/* Bottom border */}
+              <div 
+                className="absolute bottom-0 left-0 right-0 h-0.5 opacity-80"
+                style={{
+                  background: 'linear-gradient(90deg, transparent, #ec4899, #06b6d4, #ec4899, transparent)',
+                  backgroundSize: '200% 100%',
+                  animation: 'borderFlow 3s linear infinite reverse'
+                }}
+              />
+              {/* Left border */}
+              <div 
+                className="absolute top-0 left-0 bottom-0 w-0.5 opacity-80"
+                style={{
+                  background: 'linear-gradient(180deg, transparent, #ec4899, #06b6d4, #ec4899, transparent)',
+                  backgroundSize: '100% 200%',
+                  animation: 'borderFlowVertical 3s linear infinite reverse'
+                }}
+              />
+            </div>
             
             {/* Header with enhanced animations */}
             <div className="text-center mb-8">
@@ -183,11 +264,11 @@ const handleSubmit = async (e) => {
               </div>
               
               <h2 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-3" style={{ animation: 'fade-in 0.8s ease-out' }}>
-                {isLogin ? 'Welcome Back' : 'Join PhoneHub'}
+                {isLogin ? 'Welcome Back' : 'Join SwapCell'}
               </h2>
               
               <p className="text-gray-300 text-lg" style={{ animation: 'slide-up 0.6s ease-out 0.2s both' }}>
-                {isLogin ? 'Enter the future of mobile commerce' : 'Begin your digital journey today'}
+                {isLogin ? 'Enter the Future of Mobile Commerce' : 'Begin your Digital Journey Today'}
               </p>
               
               {/* Animated tech elements */}
@@ -287,7 +368,7 @@ const handleSubmit = async (e) => {
                           ? 'border-pink-400 shadow-lg shadow-pink-400/25 scale-105' 
                           : 'hover:border-white/50'
                       }`}
-                      placeholder="+65 XXXX XXXX"
+                      placeholder="+94 XXXX XXXXX"
                     />
                     {focusedField === 'phone' && (
                       <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-500/20 to-red-500/20 -z-10 animate-pulse" />

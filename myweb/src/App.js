@@ -24,15 +24,22 @@ const AppContent = () => {
 
   // Updated navigation handler to accept data
   const handleNavigation = (page, data = {}) => {
+    console.log('=== App Navigation Debug ===');
+    console.log('Navigating to:', page);
+    console.log('Navigation data:', data);
+    
     if (page !== currentPage) {
       if (page === 'home') {
-        // If navigating to home, reset history to just home
         setNavigationHistory(['home']);
         setNavigationData({});
+        setSelectedPhone(null);
       } else {
-        // Add new page to history
         setNavigationHistory(prev => [...prev, page]);
         setNavigationData(data); // Store the navigation data
+        if (page === 'details' && data.phone) {
+          console.log('Setting selectedPhone from navigation data:', data.phone);
+          setSelectedPhone(data.phone);
+        }
       }
       setCurrentPage(page);
     }
@@ -41,21 +48,23 @@ const AppContent = () => {
   const handleBack = () => {
     if (navigationHistory.length > 1) {
       const newHistory = [...navigationHistory];
-      newHistory.pop(); // Remove current page
+      newHistory.pop(); 
       const previousPage = newHistory[newHistory.length - 1];
       
       setNavigationHistory(newHistory);
       setCurrentPage(previousPage);
-      setNavigationData({}); // Clear navigation data when going back
+      setNavigationData({}); 
+      setSelectedPhone(null); 
     }
   };
 
-  // Show back button when not on home page AND there's navigation history
   const showBackButton = currentPage !== 'home' && navigationHistory.length > 1;
-
-  // Update your existing navigation handler to use the new one
   const handlePageNavigation = (page, data = {}) => {
     handleNavigation(page, data);
+  };
+
+  const handlePhoneSelection = (phone) => {
+    setSelectedPhone(phone);
   };
 
   useEffect(() => {
@@ -73,19 +82,20 @@ const AppContent = () => {
   const renderPage = () => {
     switch (currentPage) {
       case 'home':
-        return <HomePage onNavigate={handlePageNavigation} onPhoneSelect={setSelectedPhone} />;
+        return <HomePage onNavigate={handlePageNavigation} onPhoneSelect={handlePhoneSelection} />;
       case 'phones':  
-        return <PhonesPage onNavigate={handlePageNavigation} onPhoneSelect={setSelectedPhone} />;
+        return <PhonesPage onNavigate={handlePageNavigation} onPhoneSelect={handlePhoneSelection} />;
       case 'add-phone':
         return <AddPhonePage onNavigate={handlePageNavigation} />;  
-      case 'edit-phone': // Add this case for edit phone page
+      case 'edit-phone':
         return <EditPhonePage 
           onNavigate={handlePageNavigation} 
           phoneId={navigationData.phoneId} 
         />;
       case 'details':
+        const phoneToShow = navigationData.phone || selectedPhone;        
         return <PhoneDetailsPage 
-          phone={selectedPhone} 
+          phone={phoneToShow}
           phoneId={navigationData.phoneId}
           onNavigate={handlePageNavigation} 
         />;
@@ -98,7 +108,7 @@ const AppContent = () => {
       case 'profile':
         return <ProfilePage onNavigate={handlePageNavigation} />;
       default:
-        return <HomePage onNavigate={handlePageNavigation} onPhoneSelect={setSelectedPhone} />;
+        return <HomePage onNavigate={handlePageNavigation} onPhoneSelect={handlePhoneSelection} />;
     }
   };
 
