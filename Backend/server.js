@@ -9,8 +9,26 @@ const { initSocket } = require('./utils/socket');
 const app = express();
 const server = http.createServer(app);
 
+// CORS Configuration
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'https://swapcell.shop', // Netlify frontend
+  'http://localhost:3000' // local dev
+];
+
+app.use(cors({
+  origin: function(origin, callback){
+    // allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
+
 // Middleware
-app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
