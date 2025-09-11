@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, MessageCircle, Shield, Lock, User, Globe, Star, MapPin, Calendar } from 'lucide-react';
+import { Phone, MessageCircle, Shield, Lock, User, Globe, Calendar } from 'lucide-react';
 
 const SellerCard = ({ seller }) => {
   const [isHovered, setIsHovered] = useState(false);
