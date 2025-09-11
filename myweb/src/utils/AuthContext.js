@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { authAPI } from './api';
 
 const AuthContext = createContext();
 
@@ -27,80 +28,98 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user, token]);
 
-  // Login
+  // Login - now uses authAPI
   const login = async (email, password) => {
-    const res = await fetch("http://localhost:5000/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    try {
+      const response = await authAPI.login(email, password);
+      const data = response.data;
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.message || "Invalid login credentials");
+      setUser(data.user);
+      setToken(data.token);
+
+      return data.user;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || "Invalid login credentials";
+      throw new Error(errorMessage);
     }
-
-    const data = await res.json();
-
-    setUser(data.user);
-    setToken(data.token);
-
-    return data.user;
   };
 
-  // Register
+  // Register - now uses authAPI
   const register = async (formData) => {
-    const res = await fetch("http://localhost:5000/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
-    });
+    try {
+      const response = await authAPI.register(formData);
+      const data = response.data;
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.message || "Registration failed");
+      setUser(data.user);
+      setToken(data.token);
+
+      return data.user;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || "Registration failed";
+      throw new Error(errorMessage);
     }
-
-    const data = await res.json();
-
-    setUser(data.user);
-    setToken(data.token);
-
-    return data.user;
   };
 
-  // Request Password Reset
+  // Request Password Reset - now uses authAPI
   const requestPasswordReset = async (email) => {
-    const res = await fetch("http://localhost:5000/api/auth/forgot-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.message || "Failed to send reset code");
+    try {
+      const result = await authAPI.requestPasswordReset(email);
+      if (result.success) {
+        return result.data;
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      const errorMessage = error.message || "Failed to send reset code";
+      throw new Error(errorMessage);
     }
-
-    const data = await res.json();
-    return data;
   };
 
-  // Reset Password
+  // Reset Password - now uses authAPI
   const resetPassword = async (email, code, newPassword) => {
-    const res = await fetch("http://localhost:5000/api/auth/reset-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, code, newPassword }),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.message || "Failed to reset password");
+    try {
+      const result = await authAPI.resetPassword(email, code, newPassword);
+      if (result.success) {
+        return result.data;
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      const errorMessage = error.message || "Failed to reset password";
+      throw new Error(errorMessage);
     }
+  };
 
-    const data = await res.json();
-    return data;
+  // Update Profile - uses authAPI
+  const updateProfile = async (userData) => {
+    try {
+      const response = await authAPI.updateProfile(userData);
+      const updatedUser = response.data.user;
+      
+      // Update local user state
+      setUser(updatedUser);
+      
+      return updatedUser;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || "Failed to update profile";
+      throw new Error(errorMessage);
+    }
+  };
+
+  // Get Profile - uses authAPI
+  const getProfile = async () => {
+    try {
+      const response = await authAPI.getProfile();
+      const userData = response.data.user;
+      
+      // Update local user state with fresh data
+      setUser(userData);
+      
+      return userData;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || "Failed to get profile";
+      throw new Error(errorMessage);
+    }
   };
 
   // Logout
@@ -116,6 +135,19 @@ export const AuthProvider = ({ children }) => {
   const getAuthHeaders = () =>
     token ? { Authorization: `Bearer ${token}` } : {};
 
+  // Refresh token/user data
+  const refreshUser = async () => {
+    if (token) {
+      try {
+        await getProfile();
+      } catch (error) {
+        console.error('Failed to refresh user data:', error);
+        // If refresh fails, logout user
+        logout();
+      }
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{ 
@@ -126,6 +158,9 @@ export const AuthProvider = ({ children }) => {
         logout, 
         requestPasswordReset,
         resetPassword,
+        updateProfile,
+        getProfile,
+        refreshUser,
         isAuthenticated, 
         getAuthHeaders 
       }}
