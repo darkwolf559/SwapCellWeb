@@ -253,12 +253,6 @@ const PhoneCard = ({ phone, onViewDetails, showAnimation = true }) => {
                 </span>
               </div>
               <span>{phone.sellerId.name || 'Seller'}</span>
-              {phone.sellerId.rating && (
-                <div className="flex items-center">
-                  <span className="text-yellow-400">★</span>
-                  <span className="ml-1">{phone.sellerId.rating.toFixed(1)}</span>
-                </div>
-              )}
             </div>
           )}
 

@@ -6,7 +6,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
 
-  // 🔹 Load user & token from localStorage on first render
+  // Load user & token from localStorage on first render
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
     const savedToken = localStorage.getItem("token");
@@ -16,7 +16,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // 🔹 Persist changes
+  // Persist changes
   useEffect(() => {
     if (user && token) {
       localStorage.setItem("user", JSON.stringify(user));
@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user, token]);
 
-  // ✅ Login
+  // Login
   const login = async (email, password) => {
     const res = await fetch("http://localhost:5000/api/auth/login", {
       method: "POST",
@@ -42,14 +42,13 @@ export const AuthProvider = ({ children }) => {
 
     const data = await res.json();
 
-    // 🔹 Expecting backend to return { token, user }
     setUser(data.user);
     setToken(data.token);
 
     return data.user;
   };
 
-  // ✅ Register
+  // Register
   const register = async (formData) => {
     const res = await fetch("http://localhost:5000/api/auth/register", {
       method: "POST",
@@ -70,7 +69,41 @@ export const AuthProvider = ({ children }) => {
     return data.user;
   };
 
-  // ✅ Logout
+  // Request Password Reset
+  const requestPasswordReset = async (email) => {
+    const res = await fetch("http://localhost:5000/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || "Failed to send reset code");
+    }
+
+    const data = await res.json();
+    return data;
+  };
+
+  // Reset Password
+  const resetPassword = async (email, code, newPassword) => {
+    const res = await fetch("http://localhost:5000/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code, newPassword }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || "Failed to reset password");
+    }
+
+    const data = await res.json();
+    return data;
+  };
+
+  // Logout
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -78,14 +111,24 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("token");
   };
 
-  // ✅ Auth helpers
+  // Auth helpers
   const isAuthenticated = () => !!token;
   const getAuthHeaders = () =>
     token ? { Authorization: `Bearer ${token}` } : {};
 
   return (
     <AuthContext.Provider
-      value={{ user, token, login, register, logout, isAuthenticated, getAuthHeaders }}
+      value={{ 
+        user, 
+        token, 
+        login, 
+        register, 
+        logout, 
+        requestPasswordReset,
+        resetPassword,
+        isAuthenticated, 
+        getAuthHeaders 
+      }}
     >
       {children}
     </AuthContext.Provider>

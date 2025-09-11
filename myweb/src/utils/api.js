@@ -66,6 +66,47 @@ export const authAPI = {
       'Content-Type': 'multipart/form-data',
     },
   }),
+  
+  // Forgot Password API
+  requestPasswordReset: async (email) => {
+    try {
+      const response = await api.post('/auth/forgot-password', { email });
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Verification code sent to your email'
+      };
+    } catch (error) {
+      console.error('Request password reset error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to send verification code',
+        error: error.response?.data || error.message
+      };
+    }
+  },
+  
+  resetPassword: async (email, code, newPassword) => {
+    try {
+      const response = await api.post('/auth/reset-password', { 
+        email, 
+        code, 
+        newPassword 
+      });
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Password reset successful'
+      };
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to reset password',
+        error: error.response?.data || error.message
+      };
+    }
+  },
 };
 
 // Phone API

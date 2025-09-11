@@ -315,7 +315,7 @@ const CheckoutPage = ({ onNavigate }) => {
                 value={formData.firstName}
                 onChange={(e) => handleInputChange('firstName', e.target.value)}
                 className={`w-full bg-gray-800/50 border ${formErrors.firstName ? 'border-red-500' : 'border-gray-600'} rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors`}
-                placeholder="John"
+                placeholder="Radun"
               />
               {formErrors.firstName && <p className="text-red-400 text-sm mt-1">{formErrors.firstName}</p>}
             </div>
@@ -327,7 +327,7 @@ const CheckoutPage = ({ onNavigate }) => {
                 value={formData.lastName}
                 onChange={(e) => handleInputChange('lastName', e.target.value)}
                 className={`w-full bg-gray-800/50 border ${formErrors.lastName ? 'border-red-500' : 'border-gray-600'} rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors`}
-                placeholder="Doe"
+                placeholder="Senula"
               />
               {formErrors.lastName && <p className="text-red-400 text-sm mt-1">{formErrors.lastName}</p>}
             </div>
@@ -340,7 +340,7 @@ const CheckoutPage = ({ onNavigate }) => {
               value={formData.mobile}
               onChange={(e) => handleInputChange('mobile', e.target.value)}
               className={`w-full bg-gray-800/50 border ${formErrors.mobile ? 'border-red-500' : 'border-gray-600'} rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors`}
-              placeholder="+94 77 123 4567"
+              placeholder="+94771234567"
             />
             {formErrors.mobile && <p className="text-red-400 text-sm mt-1">{formErrors.mobile}</p>}
           </div>
@@ -352,7 +352,7 @@ const CheckoutPage = ({ onNavigate }) => {
               value={formData.otherMobile}
               onChange={(e) => handleInputChange('otherMobile', e.target.value)}
               className="w-full bg-gray-800/50 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors"
-              placeholder="+94 71 123 4567"
+              placeholder="+94711234567"
             />
           </div>
 
@@ -363,7 +363,7 @@ const CheckoutPage = ({ onNavigate }) => {
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
               className={`w-full bg-gray-800/50 border ${formErrors.email ? 'border-red-500' : 'border-gray-600'} rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors`}
-              placeholder="john.doe@example.com"
+              placeholder="radun@example.com"
             />
             {formErrors.email && <p className="text-red-400 text-sm mt-1">{formErrors.email}</p>}
           </div>
@@ -549,7 +549,7 @@ const CheckoutPage = ({ onNavigate }) => {
                 value={paymentData.cardholderName}
                 onChange={(e) => handlePaymentInputChange('cardholderName', e.target.value.toUpperCase())}
                 className={`w-full bg-gray-900/50 border ${formErrors.cardholderName ? 'border-red-500' : 'border-gray-600'} rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors`}
-                placeholder="JOHN DOE"
+                placeholder="RADUN SENULA"
               />
               {formErrors.cardholderName && <p className="text-red-400 text-sm mt-1">{formErrors.cardholderName}</p>}
             </div>
@@ -563,7 +563,7 @@ const CheckoutPage = ({ onNavigate }) => {
             <span className="font-medium">Secure Payment</span>
           </div>
           <p className="text-green-300 text-sm">
-            Your payment information is encrypted and secure. This is a sandbox environment for testing.
+            Your payment information is encrypted and secure.
           </p>
         </div>
       </div>
@@ -774,7 +774,7 @@ const CheckoutPage = ({ onNavigate }) => {
               { step: 3, title: 'Confirm', icon: CheckCircle }
             ].map(({ step, title, icon: Icon }) => (
               <div key={step} className="flex items-center">
-                <div className={`relative flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300 ${
+                <div className={`relative flex items-center justify-center w-12 h-12 rounded-full border-3 transition-all duration-300 ${
                   currentStep >= step 
                     ? 'bg-gradient-to-r from-cyan-500 to-purple-500 border-transparent text-white' 
                     : 'border-gray-600 text-gray-400'

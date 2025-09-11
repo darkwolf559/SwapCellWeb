@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Smartphone, Eye, EyeOff, User, Mail, Lock, Phone, ShoppingCart, Zap, Stars, Cpu } from 'lucide-react';
+import { Smartphone, Eye, EyeOff, User, Mail, Lock, Phone, ShoppingCart, Zap, Stars, Cpu, ArrowLeft, Shield, CheckCircle } from 'lucide-react';
 import { useAuth } from '../utils/AuthContext';
+import { authAPI } from '../utils/api';
 
 const AuthPage = ({ onNavigate }) => {
   const { login, register } = useAuth();
-  const [isLogin, setIsLogin] = useState(true);
+  const [currentView, setCurrentView] = useState('login'); 
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -14,8 +16,15 @@ const AuthPage = ({ onNavigate }) => {
     phone: '',
     role: 'buyer'
   });
+  const [forgotData, setForgotData] = useState({
+    email: '',
+    code: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState('');
+  const [maskedEmail, setMaskedEmail] = useState('');
 
   const handleInputChange = (e) => {
     setFormData({
@@ -24,38 +33,147 @@ const AuthPage = ({ onNavigate }) => {
     });
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setIsLoading(true);
-  setError(null);
+  const handleForgotInputChange = (e) => {
+    setForgotData({
+      ...forgotData,
+      [e.target.name]: e.target.value
+    });
+  };
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(formData.email)) {
-    setError("Please enter a valid email address");
-    setIsLoading(false);
-    return;
-  }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
 
-  try {
-    let userData;
-    if (isLogin) {
-      userData = await login(formData.email, formData.password);
-    } else {
-      userData = await register(formData);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError("Please enter a valid email address");
+      setIsLoading(false);
+      return;
     }
 
-    if (userData) {
-      if (onNavigate) onNavigate("home");
+        if (currentView === 'register' && formData.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      setIsLoading(false);
+      return;
     }
-  } catch (err) {
-    setError(err.message || "Authentication failed");
-  } finally {
-    setIsLoading(false);
-  }
-};
 
-  const toggleAuthMode = () => {
-    setIsLogin(!isLogin);
+        if (currentView === 'register' && formData.phone) {
+      const phoneRegex = /^(\+94|0)[1-9][0-9]{8}$/;
+      if (!phoneRegex.test(formData.phone.replace(/\s/g, ''))) {
+        setError("Please enter a valid Sri Lankan phone number (eg. +94771234567 or 0771234567)");
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    try {
+      let userData;
+      if (currentView === 'login') {
+        userData = await login(formData.email, formData.password);
+      } else if (currentView === 'register') {
+        userData = await register(formData);
+      }
+
+      if (userData) {
+        if (onNavigate) onNavigate("home");
+      }
+    } catch (err) {
+      setError(err.message || "Authentication failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotData.email) {
+      setError("Please enter your email address");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(forgotData.email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await authAPI.requestPasswordReset(forgotData.email);
+      
+      if (response.success) {
+        setMaskedEmail(response.data.email);
+        setSuccessMessage(response.message);
+        setCurrentView('verify');
+      } else {
+        setError(response.message);
+      }
+    } catch (err) {
+      setError("Failed to send verification code. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!forgotData.code || !forgotData.newPassword || !forgotData.confirmPassword) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    if (forgotData.newPassword !== forgotData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    if (forgotData.newPassword.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await authAPI.resetPassword(
+        forgotData.email,
+        forgotData.code,
+        forgotData.newPassword
+      );
+      
+      if (response.success) {
+        setSuccessMessage(response.message);
+        setCurrentView('success');
+        // Clear form data
+        setForgotData({
+          email: '',
+          code: '',
+          newPassword: '',
+          confirmPassword: ''
+        });
+      } else {
+        setError(response.message);
+      }
+    } catch (err) {
+      setError("Failed to reset password. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetToLogin = () => {
+    setCurrentView('login');
+    setError(null);
+    setSuccessMessage(null);
+    setForgotData({
+      email: '',
+      code: '',
+      newPassword: '',
+      confirmPassword: ''
+    });
     setFormData({
       name: '',
       email: '',
@@ -65,10 +183,26 @@ const handleSubmit = async (e) => {
     });
   };
 
+  const toggleAuthMode = () => {
+    if (currentView === 'login') {
+      setCurrentView('register');
+    } else {
+      setCurrentView('login');
+    }
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
+      phone: '',
+      role: 'buyer'
+    });
+    setError(null);
+    setSuccessMessage(null);
+  };
+
   // Floating mobile phones component
   const FloatingMobiles = () => (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Floating mobile phones */}
       {[...Array(12)].map((_, i) => (
         <div
           key={`mobile-${i}`}
@@ -87,7 +221,6 @@ const handleSubmit = async (e) => {
         </div>
       ))}
       
-      {/* Twinkling stars */}
       {[...Array(20)].map((_, i) => (
         <div
           key={`star-${i}`}
@@ -107,10 +240,197 @@ const handleSubmit = async (e) => {
   const AnimatedBg = () => (
     <div className="fixed inset-0 overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900" style={{ animation: 'gradientShift 15s ease infinite' }} />
-
       <div className="absolute inset-0 bg-gradient-to-tr from-pink-500/20 via-transparent to-cyan-500/20" style={{ animation: 'gradientRotate 25s linear infinite' }} />
-
       <div className="absolute inset-0 bg-gradient-to-bl from-transparent via-purple-500/10 to-transparent" style={{ animation: 'gradientFloat 20s ease-in-out infinite' }} />
+    </div>
+  );
+
+  const renderForgotPasswordForm = () => (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <Shield className="h-12 w-12 mx-auto text-cyan-400 mb-4" />
+        <h3 className="text-2xl font-bold text-white mb-2">Reset Your Password</h3>
+        <p className="text-gray-300">Enter your email to receive a verification code</p>
+      </div>
+
+      <div className="relative group">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Email Address
+        </label>
+        <div className="relative">
+          <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="email"
+            name="email"
+            value={forgotData.email}
+            onChange={handleForgotInputChange}
+            onFocus={() => setFocusedField('forgotEmail')}
+            onBlur={() => setFocusedField('')}
+            className={`w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
+              focusedField === 'forgotEmail' 
+                ? 'border-cyan-400 shadow-lg shadow-cyan-400/25 scale-105' 
+                : 'hover:border-white/50'
+            }`}
+            placeholder="Enter your email address"
+          />
+        </div>
+      </div>
+
+      <button
+        onClick={handleForgotPassword}
+        disabled={isLoading}
+        className="w-full relative bg-gradient-to-r from-cyan-500 to-purple-500 text-white py-3 px-6 rounded-xl font-semibold transition-all duration-300 shadow-2xl hover:shadow-cyan-500/25 transform hover:scale-105 disabled:transform-none disabled:opacity-50"
+      >
+        {isLoading ? (
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+            Sending Code...
+          </div>
+        ) : (
+          'Send Verification Code'
+        )}
+      </button>
+
+      <button
+        onClick={resetToLogin}
+        className="w-full text-gray-400 hover:text-white transition-colors flex items-center justify-center"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Login
+      </button>
+    </div>
+  );
+
+  const renderVerifyCodeForm = () => (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <Mail className="h-12 w-12 mx-auto text-purple-400 mb-4" />
+        <h3 className="text-2xl font-bold text-white mb-2">Enter Verification Code</h3>
+        <p className="text-gray-300">We sent a 6-digit code to</p>
+        <p className="text-cyan-400 font-medium">{maskedEmail}</p>
+      </div>
+
+      <div className="relative group">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Verification Code
+        </label>
+        <input
+          type="text"
+          name="code"
+          value={forgotData.code}
+          onChange={handleForgotInputChange}
+          onFocus={() => setFocusedField('code')}
+          onBlur={() => setFocusedField('')}
+          className={`w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white text-center text-2xl tracking-widest placeholder-gray-400 transition-all duration-300 ${
+            focusedField === 'code' 
+              ? 'border-purple-400 shadow-lg shadow-purple-400/25 scale-105' 
+              : 'hover:border-white/50'
+          }`}
+          placeholder="000000"
+          maxLength="6"
+        />
+      </div>
+
+      <div className="relative group">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          New Password
+        </label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type={showPassword ? 'text' : 'password'}
+            name="newPassword"
+            value={forgotData.newPassword}
+            onChange={handleForgotInputChange}
+            onFocus={() => setFocusedField('newPassword')}
+            onBlur={() => setFocusedField('')}
+            className={`w-full pl-10 pr-12 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
+              focusedField === 'newPassword' 
+                ? 'border-cyan-400 shadow-lg shadow-cyan-400/25 scale-105' 
+                : 'hover:border-white/50'
+            }`}
+            placeholder="Enter new password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+          >
+            {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="relative group">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Confirm New Password
+        </label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type={showPassword ? 'text' : 'password'}
+            name="confirmPassword"
+            value={forgotData.confirmPassword}
+            onChange={handleForgotInputChange}
+            onFocus={() => setFocusedField('confirmPassword')}
+            onBlur={() => setFocusedField('')}
+            className={`w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
+              focusedField === 'confirmPassword' 
+                ? 'border-pink-400 shadow-lg shadow-pink-400/25 scale-105' 
+                : 'hover:border-white/50'
+            }`}
+            placeholder="Confirm new password"
+          />
+        </div>
+      </div>
+
+      <button
+        onClick={handleResetPassword}
+        disabled={isLoading}
+        className="w-full relative bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 px-6 rounded-xl font-semibold transition-all duration-300 shadow-2xl hover:shadow-purple-500/25 transform hover:scale-105 disabled:transform-none disabled:opacity-50"
+      >
+        {isLoading ? (
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+            Resetting Password...
+          </div>
+        ) : (
+          'Reset Password'
+        )}
+      </button>
+
+      <button
+        onClick={() => setCurrentView('forgot')}
+        className="w-full text-gray-400 hover:text-white transition-colors flex items-center justify-center"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Email
+      </button>
+    </div>
+  );
+
+  const renderSuccessForm = () => (
+    <div className="space-y-6 text-center">
+      <div className="mb-6">
+        <CheckCircle className="h-16 w-16 mx-auto text-green-400 mb-4" />
+        <h3 className="text-2xl font-bold text-white mb-2">Password Reset Successful!</h3>
+        <p className="text-gray-300">Your password has been changed successfully.</p>
+        <p className="text-gray-300 mt-2">You can now log in with your new password.</p>
+      </div>
+
+      <div className="bg-green-500/20 border border-green-500/30 rounded-xl p-4 mb-6">
+        <div className="flex items-center justify-center text-green-300">
+          <CheckCircle className="h-5 w-5 mr-2" />
+          <span className="text-sm font-medium">Check your email for confirmation</span>
+        </div>
+      </div>
+
+      <button
+        onClick={resetToLogin}
+        className="w-full relative bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 px-6 rounded-xl font-semibold transition-all duration-300 shadow-2xl hover:shadow-green-500/25 transform hover:scale-105"
+      >
+        Continue to Login
+      </button>
     </div>
   );
 
@@ -195,12 +515,10 @@ const handleSubmit = async (e) => {
         `}
       </style>
       
-      {/* Added pt-20 to account for navigation bar */}
       <div className="min-h-screen relative overflow-hidden flex items-center justify-center py-20 px-4 sm:px-6 lg:px-8">
         <AnimatedBg />
         <FloatingMobiles />
         
-        {/* Main container with advanced animations */}
         <div className="relative z-10 max-w-md w-full">
           <div 
             className="relative bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-8 transform transition-all duration-700 hover:scale-105"
@@ -208,12 +526,9 @@ const handleSubmit = async (e) => {
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 50px rgba(59, 130, 246, 0.3)'
             }}
           >
-            {/* Glowing border effect with animated blue/pink edges */}
             <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 opacity-75 blur-sm -z-10 animate-pulse" />
             
-            {/* Animated moving borders */}
             <div className="absolute inset-0 rounded-3xl overflow-hidden -z-10">
-              {/* Top border */}
               <div 
                 className="absolute top-0 left-0 right-0 h-0.5 opacity-80"
                 style={{
@@ -222,7 +537,6 @@ const handleSubmit = async (e) => {
                   animation: 'borderFlow 3s linear infinite'
                 }}
               />
-              {/* Right border */}
               <div 
                 className="absolute top-0 right-0 bottom-0 w-0.5 opacity-80"
                 style={{
@@ -231,7 +545,6 @@ const handleSubmit = async (e) => {
                   animation: 'borderFlowVertical 3s linear infinite'
                 }}
               />
-              {/* Bottom border */}
               <div 
                 className="absolute bottom-0 left-0 right-0 h-0.5 opacity-80"
                 style={{
@@ -240,7 +553,6 @@ const handleSubmit = async (e) => {
                   animation: 'borderFlow 3s linear infinite reverse'
                 }}
               />
-              {/* Left border */}
               <div 
                 className="absolute top-0 left-0 bottom-0 w-0.5 opacity-80"
                 style={{
@@ -251,7 +563,7 @@ const handleSubmit = async (e) => {
               />
             </div>
             
-            {/* Header with enhanced animations */}
+            {/* Header */}
             <div className="text-center mb-8">
               <div className="relative w-20 h-20 mx-auto mb-6">
                 <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-purple-600 rounded-full" style={{ animation: 'spin-slow 3s linear infinite' }} />
@@ -264,14 +576,19 @@ const handleSubmit = async (e) => {
               </div>
               
               <h2 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-3" style={{ animation: 'fade-in 0.8s ease-out' }}>
-                {isLogin ? 'Welcome Back' : 'Join SwapCell'}
+                {currentView === 'login' ? 'Welcome Back' : 
+                 currentView === 'register' ? 'Join SwapCell' :
+                 currentView === 'forgot' ? 'Forgot Password' :
+                 currentView === 'verify' ? 'Verify Code' : 'Success'}
               </h2>
               
               <p className="text-gray-300 text-lg" style={{ animation: 'slide-up 0.6s ease-out 0.2s both' }}>
-                {isLogin ? 'Enter the Future of Mobile Commerce' : 'Begin your Digital Journey Today'}
+                {currentView === 'login' ? 'Enter the Future of Mobile Commerce' : 
+                 currentView === 'register' ? 'Begin your Digital Journey Today' :
+                 currentView === 'forgot' ? 'We\'ll help you reset your password' :
+                 currentView === 'verify' ? 'Enter the code we sent you' : 'You\'re all set!'}
               </p>
               
-              {/* Animated tech elements */}
               <div className="flex justify-center space-x-4 mt-4 opacity-60">
                 <Zap className="h-4 w-4 text-cyan-400 animate-bounce" style={{ animationDelay: '0s' }} />
                 <Stars className="h-4 w-4 text-purple-400 animate-bounce" style={{ animationDelay: '0.3s' }} />
@@ -279,7 +596,7 @@ const handleSubmit = async (e) => {
               </div>
             </div>
 
-            {/* Enhanced Error Display */}
+            {/* Error and Success Messages */}
             {error && (
               <div className="mb-6 p-4 bg-gradient-to-r from-red-500/20 to-pink-500/20 backdrop-blur-sm border border-red-400/30 rounded-xl text-center" style={{ animation: 'slide-in-left 0.3s ease-out' }}>
                 <div className="flex items-center justify-center text-red-300">
@@ -289,228 +606,241 @@ const handleSubmit = async (e) => {
               </div>
             )}
 
-            <div className="space-y-6">
-              {/* Enhanced form fields */}
-              {!isLogin && (
-                <div className="relative group" style={{ animation: 'slide-in-left 0.6s ease-out' }}>
-                  <label className="block text-sm font-medium text-gray-300 mb-2 transition-colors group-hover:text-cyan-400">
-                    Full Name
+            {successMessage && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-sm border border-green-400/30 rounded-xl text-center" style={{ animation: 'slide-in-right 0.3s ease-out' }}>
+                <div className="flex items-center justify-center text-green-300">
+                  <CheckCircle className="h-4 w-4 mr-2 animate-pulse" />
+                  <span className="text-sm font-medium">{successMessage}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Render appropriate form based on current view */}
+            {currentView === 'forgot' && renderForgotPasswordForm()}
+            {currentView === 'verify' && renderVerifyCodeForm()}
+            {currentView === 'success' && renderSuccessForm()}
+
+            {/* Main login/register forms */}
+            {(currentView === 'login' || currentView === 'register') && (
+              <div className="space-y-6">
+                {/* Name field for register */}
+                {currentView === 'register' && (
+                  <div className="relative group" style={{ animation: 'slide-in-left 0.6s ease-out' }}>
+                    <label className="block text-sm font-medium text-gray-300 mb-2 transition-colors group-hover:text-cyan-400">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 transition-colors group-hover:text-cyan-400" />
+                      <input
+                        type="text"
+                        name="name"
+                        required
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        onFocus={() => setFocusedField('name')}
+                        onBlur={() => setFocusedField('')}
+                        className={`w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
+                          focusedField === 'name' 
+                            ? 'border-cyan-400 shadow-lg shadow-cyan-400/25 scale-105' 
+                            : 'hover:border-white/50'
+                        }`}
+                        placeholder="Enter your full name"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Email field */}
+                <div className="relative group" style={{ animation: 'slide-in-right 0.6s ease-out' }}>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 transition-colors group-hover:text-purple-400">
+                    Email Address
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 transition-colors group-hover:text-cyan-400" />
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 transition-colors group-hover:text-purple-400" />
                     <input
-                      type="text"
-                      name="name"
+                      type="email"
+                      name="email"
                       required
-                      value={formData.name}
+                      value={formData.email}
                       onChange={handleInputChange}
-                      onFocus={() => setFocusedField('name')}
+                      onFocus={() => setFocusedField('email')}
                       onBlur={() => setFocusedField('')}
                       className={`w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
-                        focusedField === 'name' 
+                        focusedField === 'email' 
+                          ? 'border-purple-400 shadow-lg shadow-purple-400/25 scale-105' 
+                          : 'hover:border-white/50'
+                      }`}
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                </div>
+
+                {/* Phone field for register */}
+                {currentView === 'register' && (
+                  <div className="relative group" style={{ animation: 'slide-in-left 0.6s ease-out' }}>
+                    <label className="block text-sm font-medium text-gray-300 mb-2 transition-colors group-hover:text-pink-400">
+                      Phone Number
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 transition-colors group-hover:text-pink-400" />
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        onFocus={() => setFocusedField('phone')}
+                        onBlur={() => setFocusedField('')}
+                        className={`w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
+                          focusedField === 'phone' 
+                            ? 'border-pink-400 shadow-lg shadow-pink-400/25 scale-105' 
+                            : 'hover:border-white/50'
+                        }`}
+                        placeholder="+94 XXXX XXXXX"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Password field */}
+                <div className="relative group" style={{ animation: 'slide-in-right 0.6s ease-out' }}>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 transition-colors group-hover:text-cyan-400">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 transition-colors group-hover:text-cyan-400" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      required
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      onFocus={() => setFocusedField('password')}
+                      onBlur={() => setFocusedField('')}
+                      className={`w-full pl-10 pr-12 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
+                        focusedField === 'password' 
                           ? 'border-cyan-400 shadow-lg shadow-cyan-400/25 scale-105' 
                           : 'hover:border-white/50'
                       }`}
-                      placeholder="Enter your full name"
+                      placeholder="Enter your password"
                     />
-                    {focusedField === 'name' && (
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/20 -z-10 animate-pulse" />
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {/* Email field */}
-              <div className="relative group" style={{ animation: 'slide-in-right 0.6s ease-out' }}>
-                <label className="block text-sm font-medium text-gray-300 mb-2 transition-colors group-hover:text-purple-400">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 transition-colors group-hover:text-purple-400" />
-                  <input
-                    type="email"
-                    name="email"
-                    required
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    onFocus={() => setFocusedField('email')}
-                    onBlur={() => setFocusedField('')}
-                    className={`w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
-                      focusedField === 'email' 
-                        ? 'border-purple-400 shadow-lg shadow-purple-400/25 scale-105' 
-                        : 'hover:border-white/50'
-                    }`}
-                    placeholder="Enter your email"
-                  />
-                  {focusedField === 'email' && (
-                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 -z-10 animate-pulse" />
-                  )}
-                </div>
-              </div>
-
-              {/* Phone field */}
-              {!isLogin && (
-                <div className="relative group" style={{ animation: 'slide-in-left 0.6s ease-out' }}>
-                  <label className="block text-sm font-medium text-gray-300 mb-2 transition-colors group-hover:text-pink-400">
-                    Phone Number
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 transition-colors group-hover:text-pink-400" />
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      onFocus={() => setFocusedField('phone')}
-                      onBlur={() => setFocusedField('')}
-                      className={`w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
-                        focusedField === 'phone' 
-                          ? 'border-pink-400 shadow-lg shadow-pink-400/25 scale-105' 
-                          : 'hover:border-white/50'
-                      }`}
-                      placeholder="+94 XXXX XXXXX"
-                    />
-                    {focusedField === 'phone' && (
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-500/20 to-red-500/20 -z-10 animate-pulse" />
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Password field */}
-              <div className="relative group" style={{ animation: 'slide-in-right 0.6s ease-out' }}>
-                <label className="block text-sm font-medium text-gray-300 mb-2 transition-colors group-hover:text-cyan-400">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 transition-colors group-hover:text-cyan-400" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    name="password"
-                    required
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    onFocus={() => setFocusedField('password')}
-                    onBlur={() => setFocusedField('')}
-                    className={`w-full pl-10 pr-12 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder-gray-400 transition-all duration-300 ${
-                      focusedField === 'password' 
-                        ? 'border-cyan-400 shadow-lg shadow-cyan-400/25 scale-105' 
-                        : 'hover:border-white/50'
-                    }`}
-                    placeholder="Enter your password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                  {focusedField === 'password' && (
-                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-500/20 -z-10 animate-pulse" />
-                  )}
-                </div>
-              </div>
-
-              {/* Enhanced role selection */}
-              {!isLogin && (
-                <div style={{ animation: 'fade-in-up 0.8s ease-out' }}>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    Account Type
-                  </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className={`cursor-pointer border-2 rounded-2xl p-4 transition-all duration-300 transform hover:scale-105 ${
-                      formData.role === 'buyer' 
-                        ? 'border-cyan-400 bg-cyan-400/20 shadow-lg shadow-cyan-400/25' 
-                        : 'border-white/30 hover:border-white/50 bg-white/5'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="role"
-                        value="buyer"
-                        checked={formData.role === 'buyer'}
-                        onChange={handleInputChange}
-                        className="sr-only"
-                      />
-                      <div className="text-center">
-                        <div className="relative">
-                          <ShoppingCart className="h-8 w-8 mx-auto mb-2 text-cyan-400" />
-                          {formData.role === 'buyer' && (
-                            <div className="absolute inset-0 bg-cyan-400/20 rounded-full animate-ping" />
-                          )}
-                        </div>
-                        <div className="font-medium text-white">Buyer</div>
-                        <div className="text-sm text-gray-400">Discover amazing phones</div>
-                      </div>
+                {/* Role selection for register */}
+                {currentView === 'register' && (
+                  <div style={{ animation: 'fade-in-up 0.8s ease-out' }}>
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      Account Type
                     </label>
-                    
-                    <label className={`cursor-pointer border-2 rounded-2xl p-4 transition-all duration-300 transform hover:scale-105 ${
-                      formData.role === 'seller' 
-                        ? 'border-purple-400 bg-purple-400/20 shadow-lg shadow-purple-400/25' 
-                        : 'border-white/30 hover:border-white/50 bg-white/5'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="role"
-                        value="seller"
-                        checked={formData.role === 'seller'}
-                        onChange={handleInputChange}
-                        className="sr-only"
-                      />
-                      <div className="text-center">
-                        <div className="relative">
-                          <Smartphone className="h-8 w-8 mx-auto mb-2 text-purple-400" />
-                          {formData.role === 'seller' && (
-                            <div className="absolute inset-0 bg-purple-400/20 rounded-full animate-ping" />
-                          )}
+                    <div className="grid grid-cols-2 gap-4">
+                      <label className={`cursor-pointer border-2 rounded-2xl p-4 transition-all duration-300 transform hover:scale-105 ${
+                        formData.role === 'buyer' 
+                          ? 'border-cyan-400 bg-cyan-400/20 shadow-lg shadow-cyan-400/25' 
+                          : 'border-white/30 hover:border-white/50 bg-white/5'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="role"
+                          value="buyer"
+                          checked={formData.role === 'buyer'}
+                          onChange={handleInputChange}
+                          className="sr-only"
+                        />
+                        <div className="text-center">
+                          <div className="relative">
+                            <ShoppingCart className="h-8 w-8 mx-auto mb-2 text-cyan-400" />
+                          </div>
+                          <div className="font-medium text-white">Buyer</div>
+                          <div className="text-sm text-gray-400">Discover amazing phones</div>
                         </div>
-                        <div className="font-medium text-white">Seller</div>
-                        <div className="text-sm text-gray-400">Share your devices</div>
-                      </div>
-                    </label>
+                      </label>
+                      
+                      <label className={`cursor-pointer border-2 rounded-2xl p-4 transition-all duration-300 transform hover:scale-105 ${
+                        formData.role === 'seller' 
+                          ? 'border-purple-400 bg-purple-400/20 shadow-lg shadow-purple-400/25' 
+                          : 'border-white/30 hover:border-white/50 bg-white/5'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="role"
+                          value="seller"
+                          checked={formData.role === 'seller'}
+                          onChange={handleInputChange}
+                          className="sr-only"
+                        />
+                        <div className="text-center">
+                          <div className="relative">
+                            <Smartphone className="h-8 w-8 mx-auto mb-2 text-purple-400" />
+                          </div>
+                          <div className="font-medium text-white">Seller</div>
+                          <div className="text-sm text-gray-400">Share your devices</div>
+                        </div>
+                      </label>
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {/* Enhanced submit button */}
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isLoading}
-                className="w-full relative bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white py-4 px-6 rounded-2xl font-semibold transition-all duration-300 shadow-2xl hover:shadow-cyan-500/25 transform hover:scale-105 disabled:transform-none disabled:opacity-50 overflow-hidden group"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 via-purple-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                
-                {isLoading ? (
-                  <div className="flex items-center justify-center relative z-10">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
-                    <span className="animate-pulse">
-                      {isLogin ? 'Connecting to the future...' : 'Creating your digital identity...'}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="relative z-10 flex items-center justify-center">
-                    {isLogin ? 'Enter the Hub' : 'Begin Journey'}
-                    <Zap className="ml-2 h-5 w-5 animate-pulse" />
-                  </span>
                 )}
-                
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-              </button>
-            </div>
 
-            {/* Enhanced toggle button */}
-            <div className="text-center mt-8">
-              <button
-                onClick={toggleAuthMode}
-                className="text-transparent bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text font-medium transition-all duration-300 hover:from-purple-400 hover:to-pink-400 transform hover:scale-110"
-              >
-                {isLogin 
-                  ? "New to the future? Join us" 
-                  : "Already exploring? Sign in"
-                }
-              </button>
-            </div>
+                {/* Submit button */}
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isLoading}
+                  className="w-full relative bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white py-4 px-6 rounded-2xl font-semibold transition-all duration-300 shadow-2xl hover:shadow-cyan-500/25 transform hover:scale-105 disabled:transform-none disabled:opacity-50 overflow-hidden group"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 via-purple-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  
+                  {isLoading ? (
+                    <div className="flex items-center justify-center relative z-10">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+                      <span className="animate-pulse">
+                        {currentView === 'login' ? 'Connecting to the future...' : 'Creating your digital identity...'}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="relative z-10 flex items-center justify-center">
+                      {currentView === 'login' ? 'Enter the Hub' : 'Begin Journey'}
+                      <Zap className="ml-2 h-5 w-5 animate-pulse" />
+                    </span>
+                  )}
+                  
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                </button>
+
+                {/* Forgot password link (only on login) */}
+                {currentView === 'login' && (
+                  <div className="text-center">
+                    <button
+                      onClick={() => setCurrentView('forgot')}
+                      className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition-colors"
+                    >
+                      Forgot your password?
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Toggle button (only for login/register views) */}
+            {(currentView === 'login' || currentView === 'register') && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={toggleAuthMode}
+                  className="text-transparent bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text font-medium transition-all duration-300 hover:from-purple-400 hover:to-pink-400 transform hover:scale-110"
+                >
+                  {currentView === 'login' 
+                    ? "New to the future? Join us" 
+                    : "Already exploring? Sign in"
+                  }
+                </button>
+              </div>
+            )}
 
           </div>
         </div>
