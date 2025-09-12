@@ -8,7 +8,7 @@ const { initSocket } = require('./utils/socket');
 
 const app = express();
 const server = http.createServer(app);
-
+const adminRoutes = require('./routes/adminRoutes');
 // CORS Configuration
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'https://swapcell.shop', // Netlify frontend
@@ -51,6 +51,7 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/favorites', require('./routes/favoriteRoutes'));
 
+app.use('/api/admin', adminRoutes);
 // Search Suggestions Route (no auth)
 app.use('/api/search/suggestions', require('./routes/searchRoutes'));
 

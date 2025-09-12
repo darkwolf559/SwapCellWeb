@@ -108,9 +108,111 @@ export const authAPI = {
     }
   },
 };
+export const adminAPI = {
+  // Get dashboard statistics
+  getDashboardStats: () => api.get('/admin/dashboard/stats'),
+  
+  // Get pending listings for review
+  getPendingListings: (params = {}) => api.get('/admin/listings/pending', { params }),
+  
+  // Get all listings (with status filtering)
+  getAllListings: (params = {}) => api.get('/admin/listings/all', { params }),
+  
+  // Get listing for detailed review
+  getListingForReview: (phoneId) => api.get(`/admin/listings/${phoneId}/review`),
+  
+  // Approve a listing
+  approveListing: async (phoneId, adminNotes = '') => {
+    try {
+      const response = await api.put(`/admin/listings/${phoneId}/approve`, { adminNotes });
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Listing approved successfully'
+      };
+    } catch (error) {
+      console.error('Admin API - Approve listing error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to approve listing',
+        error: error.response?.data || error.message
+      };
+    }
+  },
+  
+  // Reject a listing
+  rejectListing: async (phoneId, reason, adminNotes = '') => {
+    try {
+      const response = await api.put(`/admin/listings/${phoneId}/reject`, { 
+        reason, 
+        adminNotes 
+      });
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Listing rejected successfully'
+      };
+    } catch (error) {
+      console.error('Admin API - Reject listing error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to reject listing',
+        error: error.response?.data || error.message
+      };
+    }
+  },
+  
+  // Batch approve listings
+  batchApproveListing: async (phoneIds, adminNotes = '') => {
+    try {
+      const response = await api.put('/admin/listings/batch-approve', { 
+        phoneIds, 
+        adminNotes 
+      });
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Listings approved successfully'
+      };
+    } catch (error) {
+      console.error('Admin API - Batch approve error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to batch approve listings',
+        error: error.response?.data || error.message
+      };
+    }
+  },
+  
+  // Get admin activity log
+  getActivityLog: (params = {}) => api.get('/admin/activity-log', { params }),
+  
+  // Get user management data
+  getUsers: (params = {}) => api.get('/admin/users', { params }),
+  
+  // Update user status/role
+  updateUser: async (userId, updateData) => {
+    try {
+      const response = await api.put(`/admin/users/${userId}`, updateData);
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'User updated successfully'
+      };
+    } catch (error) {
+      console.error('Admin API - Update user error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to update user',
+        error: error.response?.data || error.message
+      };
+    }
+  }
+};
 
 // Phone API
 export const phoneAPI = {
+  // Existing methods...
   getPhones: (params = {}) => api.get('/phones', { params }),
   
   getAllPhones: (params = {}) => api.get('/phones', { params }),
@@ -119,39 +221,181 @@ export const phoneAPI = {
   
   getPhoneById: (id) => api.get(`/phones/${id}`),
   
-  createPhone: (phoneData) => api.post('/phones', phoneData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  }),
-  
-  // ENHANCED UPDATE PHONE - Handles both FormData and JSON
-  updatePhone: (id, phoneData) => {
-    // Check if phoneData is FormData (contains new images)
-    if (phoneData instanceof FormData) {
-      return api.put(`/phones/${id}`, phoneData, {
+  // Updated createPhone method
+  createPhone: async (phoneData) => {
+    try {
+      const response = await api.post('/phones', phoneData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Phone listing submitted for admin approval',
+        status: response.data.status // Will be 'pending'
+      };
+    } catch (error) {
+      console.error('Phone API - Create phone error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to create listing',
+        error: error.response?.data || error.message
+      };
     }
-    // Regular JSON update (no new images)
-    return api.put(`/phones/${id}`, phoneData, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+  },
+  
+  // Updated updatePhone method
+  updatePhone: async (id, phoneData) => {
+    try {
+      let response;
+      if (phoneData instanceof FormData) {
+        response = await api.put(`/phones/${id}`, phoneData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      } else {
+        response = await api.put(`/phones/${id}`, phoneData, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+      }
+      
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Phone updated successfully'
+      };
+    } catch (error) {
+      console.error('Phone API - Update phone error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to update listing',
+        error: error.response?.data || error.message
+      };
+    }
   },
   
   deletePhone: (id) => api.delete(`/phones/${id}`),
   
-  getMyListings: () => api.get('/users/my-listings'),
+  // Updated getMyListings to include status information
+  getMyListings: (params = {}) => api.get('/users/my-listings', { params }),
+  
+  // New method to get seller dashboard
+  getSellerDashboard: () => api.get('/users/seller-dashboard'),
   
   searchSuggestions: (query) => api.get('/search/suggestions', { params: { query } }),
   
   validatePhones: (phoneIds) => api.post('/phones/validate', { phoneIds }),
 };
-
+export const adminUtils = {
+  // Format listing status for display
+  formatListingStatus: (status) => {
+    const statusMap = {
+      'pending': { label: 'Pending Review', color: 'yellow', icon: 'clock' },
+      'approved': { label: 'Approved', color: 'green', icon: 'check-circle' },
+      'rejected': { label: 'Rejected', color: 'red', icon: 'x-circle' }
+    };
+    return statusMap[status] || { label: status, color: 'gray', icon: 'help-circle' };
+  },
+  
+  // Get status badge classes
+  getStatusBadgeClasses: (status) => {
+    const classMap = {
+      'pending': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      'approved': 'bg-green-500/20 text-green-400 border-green-500/30',
+      'rejected': 'bg-red-500/20 text-red-400 border-red-500/30'
+    };
+    return classMap[status] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+  },
+  
+  // Format rejection reasons for display
+  formatRejectionReasons: () => [
+    'Poor image quality',
+    'Incomplete information', 
+    'Suspicious pricing',
+    'Inappropriate content',
+    'Duplicate listing',
+    'Suspected fraud',
+    'Policy violation',
+    'Other'
+  ],
+  
+  // Check if user has admin permissions
+  hasAdminPermission: (user, permission) => {
+    if (!user || user.role !== 'admin') return false;
+    
+    const permissions = user.adminPermissions || {};
+    switch (permission) {
+      case 'approve_listings':
+        return permissions.canApproveListings;
+      case 'manage_users':
+        return permissions.canManageUsers;
+      case 'view_analytics':
+        return permissions.canViewAnalytics;
+      default:
+        return false;
+    }
+  },
+  
+  // Format admin activity for display
+  formatAdminActivity: (activity) => {
+    const actionMap = {
+      'approved': { icon: 'check-circle', color: 'green', label: 'Approved' },
+      'rejected': { icon: 'x-circle', color: 'red', label: 'Rejected' },
+      'deleted': { icon: 'trash', color: 'red', label: 'Deleted' }
+    };
+    
+    return {
+      ...activity,
+      actionDisplay: actionMap[activity.status] || { 
+        icon: 'help-circle', 
+        color: 'gray', 
+        label: activity.status 
+      }
+    };
+  },
+  
+  // Validate admin actions
+  validateAdminAction: (action, phoneData, reason = '') => {
+    const errors = [];
+    
+    if (action === 'reject' && !reason.trim()) {
+      errors.push('Rejection reason is required');
+    }
+    
+    if (!phoneData || !phoneData._id) {
+      errors.push('Invalid phone listing');
+    }
+    
+    if (phoneData && phoneData.status !== 'pending') {
+      errors.push('Only pending listings can be approved or rejected');
+    }
+    
+    return errors;
+  },
+  
+  // Generate admin notification messages
+  generateNotificationMessage: (action, phoneData, count = 1) => {
+    const title = phoneData?.title || 'listing';
+    const sellerName = phoneData?.sellerId?.name || 'seller';
+    
+    switch (action) {
+      case 'approved':
+        return count > 1 
+          ? `${count} listings approved successfully`
+          : `"${title}" approved successfully`;
+      case 'rejected':
+        return `"${title}" rejected`;
+      case 'batch_approved':
+        return `${count} listings approved in batch`;
+      default:
+        return `Action completed successfully`;
+    }
+  }
+};
 // Enhanced Cart API with proper error handling
 export const cartAPI = {
   getCart: () => api.get('/cart'),

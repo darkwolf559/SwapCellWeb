@@ -200,52 +200,32 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
           />
           
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-            {/* Header with Right-Side Add Phone Button */}
-            <div className="flex items-center justify-between mb-8">
-              {/* Left spacer for balance */}
-              <div className="w-48 hidden lg:block"></div>
-              
-              {/* Centered Content */}
-              <div className="text-center flex-1 ">
-                <h1 className=" mt-6 text-6xl md:text-8xl font-black bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent animate-glow mb-4">
-                  PHONES
-                </h1>
-                <div className="flex items-center justify-center space-x-4 mb-6">
-                  <div className="h-1 w-20 bg-gradient-to-r from-transparent to-cyan-400 animate-pulse" />
-                  <Zap className="h-8 w-8 text-yellow-400 animate-bounce" />
-                  <div className="h-1 w-20 bg-gradient-to-l from-transparent to-purple-400 animate-pulse" />
-                </div>
-                <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
-                  Discover the future of mobile technology with our premium collection of pre-owned smartphones
-                </p>
+            {/* Centered Header */}
+            <div className="text-center mb-8">
+              <h1 className="mt-6 text-6xl md:text-8xl font-black bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent animate-glow mb-4">
+                PHONES
+              </h1>
+              <div className="flex items-center justify-center space-x-4 mb-6">
+                <div className="h-1 w-20 bg-gradient-to-r from-transparent to-cyan-400 animate-pulse" />
+                <Zap className="h-8 w-8 text-yellow-400 animate-bounce" />
+                <div className="h-1 w-20 bg-gradient-to-l from-transparent to-purple-400 animate-pulse" />
               </div>
-
-              {/* Right Side - Add New Phone Button */}
-              <div className="w-48 flex justify-end">
-                {user && user.role === 'seller' && (
+              <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed mb-8">
+                Discover the future of mobile technology with our premium collection of pre-owned smartphones
+              </p>
+              
+              {/* Centered Add New Phone Button */}
+              {user && user.role === 'seller' && (
+                <div className="flex justify-center">
                   <button
                     onClick={() => onNavigate('add-phone')}
-                    className="group relative bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-400 hover:via-emerald-400 hover:to-teal-400 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-500 flex items-center shadow-2xl shadow-green-500/25 transform hover:scale-105 hover:-translate-y-1 overflow-hidden"
+                    className="group relative bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-400 hover:via-emerald-400 hover:to-teal-400 text-white px-8 py-3 rounded-2xl font-semibold transition-all duration-500 inline-flex items-center shadow-2xl shadow-green-500/25 transform hover:scale-105 hover:-translate-y-1 overflow-hidden"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                     <Plus className="h-5 w-5 mr-2 relative z-10 group-hover:rotate-90 transition-transform duration-300" />
-                    <span className="relative z-10 whitespace-nowrap">Add New Phone</span>
+                    <span className="relative z-10">Add New Phone</span>
                   </button>
-                )}
-              </div>
-            </div>
-
-            {/* Mobile Layout - Centered button below content */}
-            <div className="lg:hidden text-center mb-8">
-              {user && user.role === 'seller' && (
-                <button
-                  onClick={() => onNavigate('add-phone')}
-                  className="group relative bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-400 hover:via-emerald-400 hover:to-teal-400 text-white px-8 py-3 rounded-2xl font-semibold transition-all duration-500 inline-flex items-center shadow-2xl shadow-green-500/25 transform hover:scale-105 hover:-translate-y-1 overflow-hidden whitespace-nowrap"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-                  <Plus className="h-5 w-5 mr-2 relative z-10 group-hover:rotate-90 transition-transform duration-300" />
-                  <span className="relative z-10">Add New Phone</span>
-                </button>
+                </div>
               )}
             </div>
 
@@ -380,11 +360,11 @@ const PhonesPage = ({ onNavigate, onPhoneSelect }) => {
                                focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 transition-all duration-300 
                                hover:bg-gray-700/50 cursor-pointer disabled:opacity-50"
                     >
-  <option className="bg-purple-800 text-white" value="featured">✨ Featured</option>
-  <option className="bg-pink-700 text-white" value="price_low">💰 Price: Low to High</option>
-  <option className="bg-purple-700 text-white" value="price_high">💎 Price: High to Low</option>
-  <option className="bg-pink-600 text-white" value="newest">🆕 Newest First</option>
-  <option className="bg-purple-600 text-white" value="rating">⭐ Highest Rated</option>
+                      <option className="bg-purple-800 text-white" value="featured">✨ Featured</option>
+                      <option className="bg-pink-700 text-white" value="price_low">💰 Price: Low to High</option>
+                      <option className="bg-purple-700 text-white" value="price_high">💎 Price: High to Low</option>
+                      <option className="bg-pink-600 text-white" value="newest">🆕 Newest First</option>
+                      <option className="bg-purple-600 text-white" value="rating">⭐ Highest Rated</option>
                     </select>
                   </div>
                 </div>

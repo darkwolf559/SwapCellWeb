@@ -111,18 +111,20 @@ const PhoneDetailsPage = ({ phone, onNavigate }) => {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Recently';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays <= 7) return `${diffDays} days ago`;
-    if (diffDays <= 30) return `${Math.ceil(diffDays / 7)} weeks ago`;
-    return date.toLocaleDateString();
-  };
+const formatDate = (dateString) => {
+  if (!dateString) return 'Recently';
+  const date = new Date(dateString);
+  const now = new Date();
+
+  const diffTime = Math.abs(now - date);
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays <= 7) return `${diffDays} days ago`;
+  if (diffDays <= 30) return `${Math.ceil(diffDays / 7)} weeks ago`;
+  return date.toLocaleDateString();
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 py-8 relative overflow-hidden">

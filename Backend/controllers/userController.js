@@ -123,21 +123,134 @@ const updateProfile = async (req, res) => {
   });
 };
 
+// Updated myListings to include all statuses and provide status information
 const myListings = async (req, res) => {
   try {
     if (req.user.role !== 'seller') {
       return res.status(403).json({ message: 'Only sellers can view listings' });
     }
     
-    const phones = await Phone.find({ sellerId: req.user.userId })
-      .populate('sellerId', 'name phone rating reviewCount profilePicture')
-      .sort({ createdAt: -1 });
+    const { status, page = 1, limit = 20 } = req.query;
+    let query = { sellerId: req.user.userId };
     
-    res.json(phones);
+    // Filter by status if provided
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    const skip = (Number(page) - 1) * Number(limit);
+    
+    const phones = await Phone.find(query)
+      .populate('sellerId', 'name phone rating reviewCount profilePicture')
+      .populate('approvedBy', 'name email') // Include admin who approved/rejected
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit));
+    
+    const total = await Phone.countDocuments(query);
+    
+    // Get status counts for the seller
+    const statusCounts = await Phone.aggregate([
+      { $match: { sellerId: req.user.userId } },
+      { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+    
+    // Format status counts
+    const counts = {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      total: 0
+    };
+    
+    statusCounts.forEach(item => {
+      counts[item._id] = item.count;
+      counts.total += item.count;
+    });
+    
+    res.json({
+      phones,
+      pagination: {
+        currentPage: Number(page),
+        totalPages: Math.ceil(total / Number(limit)),
+        totalItems: total,
+        hasNext: skip + phones.length < total,
+        hasPrev: Number(page) > 1
+      },
+      statusCounts: counts
+    });
   } catch (err) { 
     console.error('My listings error:', err);
     res.status(500).json({ message: 'Server error', error: err.message }); 
   }
 };
 
-module.exports = { getProfile, updateProfile, myListings };
+// New method to get seller dashboard stats
+const getSellerDashboard = async (req, res) => {
+  try {
+    if (req.user.role !== 'seller') {
+      return res.status(403).json({ message: 'Only sellers can view dashboard' });
+    }
+    
+    const sellerId = req.user.userId;
+    
+    // Get various counts and stats
+    const [statusCounts, totalViews, recentActivity] = await Promise.all([
+      // Status breakdown
+      Phone.aggregate([
+        { $match: { sellerId: sellerId } },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      
+      // Total views across all listings
+      Phone.aggregate([
+        { $match: { sellerId: sellerId } },
+        { $group: { _id: null, totalViews: { $sum: '$views' } } }
+      ]),
+      
+      // Recent activity (last 10 listings)
+      Phone.find({ sellerId: sellerId })
+        .select('title status createdAt approvedAt rejectedAt views adminNotes')
+        .populate('approvedBy', 'name')
+        .sort({ createdAt: -1 })
+        .limit(10)
+    ]);
+    
+    // Format status counts
+    const counts = {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      total: 0
+    };
+    
+    statusCounts.forEach(item => {
+      counts[item._id] = item.count;
+      counts.total += item.count;
+    });
+    
+    const totalViewsCount = totalViews.length > 0 ? totalViews[0].totalViews : 0;
+    
+    res.json({
+      statusCounts: counts,
+      totalViews: totalViewsCount,
+      recentActivity,
+      summary: {
+        activeListings: counts.approved,
+        pendingApproval: counts.pending,
+        needsAttention: counts.rejected,
+        totalViews: totalViewsCount
+      }
+    });
+  } catch (err) {
+    console.error('Seller dashboard error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+module.exports = { 
+  getProfile, 
+  updateProfile, 
+  myListings,
+  getSellerDashboard 
+};

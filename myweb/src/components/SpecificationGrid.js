@@ -116,12 +116,12 @@ const SpecificationGrid = ({ specs }) => {
           </h4>
           <div className="flex flex-wrap gap-3">
             {[
-              { name: 'Face ID', color: 'from-blue-400 to-purple-400' },
-              { name: 'Wireless Charging', color: 'from-green-400 to-blue-400' },
-              { name: 'Water Resistant', color: 'from-cyan-400 to-teal-400' },
+              { name: 'Face Unlock', color: 'from-blue-400 to-purple-400' },
+              { name: 'Good Battery Life', color: 'from-green-400 to-blue-400' },
+              { name: 'Fast Charging', color: 'from-cyan-400 to-teal-400' },
               { name: '4G Ready', color: 'from-purple-400 to-pink-400' },
-              { name: 'Night Mode', color: 'from-indigo-400 to-purple-400' },
-              { name: 'Fast Charging', color: 'from-yellow-400 to-red-400' }
+              { name: 'WiFi Bluetooth', color: 'from-indigo-400 to-purple-400' },
+              { name: 'Best Sound Quality', color: 'from-yellow-400 to-red-400' }
             ].map((feature, index) => (
               <div key={feature.name} className="group relative overflow-hidden" style={{ animationDelay: `${index * 150}ms` }}>
                 <div className={`absolute inset-0 bg-gradient-to-r ${feature.color} opacity-0 group-hover:opacity-100 blur-md transition-opacity duration-300`}></div>

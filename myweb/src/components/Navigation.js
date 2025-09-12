@@ -105,34 +105,40 @@ const Navigation = ({ currentPage, onNavigate, showBackButton = false, onBack })
           <div className="hidden md:flex items-center space-x-6">
             <NavLink page="home">Home</NavLink>
             <NavLink page="phones">Browse Phones</NavLink>
+            {/* Removed Add Phone button for sellers */}
+            {user && user.role === 'admin' && (
+              <NavLink page="admin">Admin Dashboard</NavLink>
+            )}
             {user && <NavLink page="profile">Profile</NavLink>}
           </div>
 
           <div className="flex items-center space-x-4">
             {/* Cart Button */}
-            <button
-              onClick={() => onNavigate('cart')}
-              className="relative p-3 text-gray-300 hover:text-cyan-400 transition-all duration-300 transform hover:scale-110 group"
-            >
-              <div className="relative">
-                <ShoppingCart className="h-6 w-6 transition-all duration-300 group-hover:rotate-12" />
-                {/* Cart glow effect */}
-                <div className="absolute inset-0 h-6 w-6 text-cyan-400 blur-sm opacity-0 group-hover:opacity-50 transition-opacity duration-300">
-                  <ShoppingCart className="h-6 w-6" />
+            {user && user.role === 'buyer' && (
+              <button
+                onClick={() => onNavigate('cart')}
+                className="relative p-3 text-gray-300 hover:text-cyan-400 transition-all duration-300 transform hover:scale-110 group"
+              >
+                <div className="relative">
+                  <ShoppingCart className="h-6 w-6 transition-all duration-300 group-hover:rotate-12" />
+                  {/* Cart glow effect */}
+                  <div className="absolute inset-0 h-6 w-6 text-cyan-400 blur-sm opacity-0 group-hover:opacity-50 transition-opacity duration-300">
+                    <ShoppingCart className="h-6 w-6" />
+                  </div>
                 </div>
-              </div>
-              
-              {cartItemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold shadow-lg animate-pulse">
-                  {cartItemCount}
-                </span>
-              )}
-              
-              {/* Pulse ring on cart updates */}
-              {cartItemCount > 0 && (
-                <div className="absolute -top-1 -right-1 h-5 w-5 bg-red-400 rounded-full animate-ping opacity-30"></div>
-              )}
-            </button>
+                
+                {cartItemCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold shadow-lg animate-pulse">
+                    {cartItemCount}
+                  </span>
+                )}
+                
+                {/* Pulse ring on cart updates */}
+                {cartItemCount > 0 && (
+                  <div className="absolute -top-1 -right-1 h-5 w-5 bg-red-400 rounded-full animate-ping opacity-30"></div>
+                )}
+              </button>
+            )}
             
             {user ? (
               <div className="flex items-center space-x-3">
@@ -203,6 +209,12 @@ const Navigation = ({ currentPage, onNavigate, showBackButton = false, onBack })
             <NavLink page="phones" className="block w-full text-left">
               <span className="block py-1">Browse Phones</span>
             </NavLink>
+            {/* Removed Add Phone button for sellers from mobile menu */}
+            {user && user.role === 'admin' && (
+              <NavLink page="admin" className="block w-full text-left">
+                <span className="block py-1">Admin Dashboard</span>
+              </NavLink>
+            )}
             {user && (
               <NavLink page="profile" className="block w-full text-left">
                 <span className="block py-1">Profile</span>

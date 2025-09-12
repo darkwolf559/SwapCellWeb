@@ -48,7 +48,12 @@ const getPhones = async (req, res) => {
   try {
     // Filters, search, pagination
     const { brand, condition, minPrice, maxPrice, search, sort, page = 1, limit = 12 } = req.query;
-    let query = { isAvailable: true };
+    
+    // Only show approved phones to regular users
+    let query = { 
+      isAvailable: true,
+      status: 'approved'  // Only approved listings visible to public
+    };
 
     if (brand && brand !== 'all') query.brand = new RegExp(brand, 'i');
     if (condition && condition !== 'all') query.condition = condition;
@@ -91,18 +96,34 @@ const getPhones = async (req, res) => {
 
 const getPhoneById = async (req, res) => {
   try {
-    const phone = await Phone.findById(req.params.id)
-      .populate('sellerId', 'name phone rating reviewCount profilePicture createdAt');
-    if (!phone) return res.status(404).json({ message: 'Phone not found' });
+    // For regular users, only show approved phones
+    // For admins, show any phone for review purposes
+    let query = { _id: req.params.id };
+    
+    if (req.user && req.user.role !== 'admin') {
+      query.status = 'approved';
+    }
 
-    await Phone.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
+    const phone = await Phone.findOne(query)
+      .populate('sellerId', 'name phone rating reviewCount profilePicture createdAt')
+      .populate('approvedBy', 'name email'); // For admin view
+
+    if (!phone) {
+      return res.status(404).json({ message: 'Phone not found' });
+    }
+
+    // Only increment views for approved phones
+    if (phone.status === 'approved') {
+      await Phone.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
+    }
+
     res.json(phone);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
 
-// Create phone with Cloudinary
+// Create phone with Cloudinary - now goes to pending status
 const createPhone = async (req, res) => {
   uploadImages(req, res, async (err) => {
     if (err) return res.status(400).json({ message: 'File upload error', error: err.message });
@@ -129,26 +150,29 @@ const createPhone = async (req, res) => {
         images,
         specs,
         sellerId: req.user.userId,
-        isAvailable: true
+        isAvailable: true,
+        status: 'pending'  // New listings start as pending
       };
 
       const phone = await Phone.create(phoneData);
       const populatedPhone = await Phone.findById(phone._id)
         .populate('sellerId', 'name phone rating reviewCount profilePicture');
 
-      // Emit socket event
+      // Emit socket event to notify admins of new listing
       try { 
-        getIO().emit('new_phone_listing', { 
+        getIO().emit('new_pending_listing', { 
           phone: populatedPhone, 
-          message: `New ${populatedPhone.brand} ${populatedPhone.title} listed!` 
+          message: `New listing "${populatedPhone.title}" requires admin approval`,
+          sellerId: populatedPhone.sellerId._id
         }); 
       } catch (socketError) { 
         console.error('Socket error:', socketError); 
       }
 
       res.status(201).json({ 
-        message: 'Phone listing created successfully', 
-        phone: populatedPhone 
+        message: 'Phone listing submitted for admin approval', 
+        phone: populatedPhone,
+        status: 'pending'
       });
     } catch (err) {
       // Clean up uploaded images on error
@@ -170,13 +194,15 @@ const createPhone = async (req, res) => {
 // Delete phone and cleanup images
 const deletePhone = async (req, res) => {
   try {
-    if (req.user.role !== 'seller') return res.status(403).json({ message: 'Only sellers can delete listings' });
+    if (req.user.role !== 'seller' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only sellers and admins can delete listings' });
+    }
 
     const phone = await Phone.findById(req.params.id);
     if (!phone) return res.status(404).json({ message: 'Phone not found' });
 
-    // Check if user owns this phone
-    if (phone.sellerId.toString() !== req.user.userId) {
+    // Check if user owns this phone (sellers can only delete their own, admins can delete any)
+    if (req.user.role === 'seller' && phone.sellerId.toString() !== req.user.userId) {
       return res.status(403).json({ message: 'You can only delete your own listings' });
     }
 
@@ -194,6 +220,19 @@ const deletePhone = async (req, res) => {
     }
 
     await Phone.findByIdAndDelete(req.params.id);
+    
+    // Emit socket event
+    try {
+      getIO().emit('listing_deleted', {
+        phoneId: req.params.id,
+        sellerId: phone.sellerId,
+        deletedBy: req.user.userId,
+        isAdminAction: req.user.role === 'admin'
+      });
+    } catch (socketError) {
+      console.error('Socket error:', socketError);
+    }
+
     res.json({ message: 'Phone listing deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -250,14 +289,36 @@ const updatePhone = async (req, res) => {
       // Clean up form data fields
       delete updateData.existingImages;
 
+      // If phone was previously rejected/approved, reset to pending for re-review
+      if (phone.status === 'rejected' || phone.status === 'approved') {
+        updateData.status = 'pending';
+        updateData.adminNotes = null;
+        updateData.approvedBy = null;
+        updateData.approvedAt = null;
+        updateData.rejectedAt = null;
+      }
+
       const updatedPhone = await Phone.findByIdAndUpdate(
         req.params.id,
         updateData,
         { new: true, runValidators: true }
       ).populate('sellerId', 'name phone rating reviewCount profilePicture');
 
+      // Notify admins if status changed to pending
+      if (updateData.status === 'pending') {
+        try {
+          getIO().emit('listing_updated_pending', {
+            phone: updatedPhone,
+            message: `Updated listing "${updatedPhone.title}" requires admin re-approval`,
+            sellerId: updatedPhone.sellerId._id
+          });
+        } catch (socketError) {
+          console.error('Socket error:', socketError);
+        }
+      }
+
       res.json({ 
-        message: 'Phone updated successfully', 
+        message: phone.status !== 'pending' ? 'Phone updated and submitted for admin re-approval' : 'Phone updated successfully', 
         phone: updatedPhone 
       });
       
@@ -268,10 +329,67 @@ const updatePhone = async (req, res) => {
   });
 };
 
+// Get listing stats for seller dashboard
+const getSellerStats = async (req, res) => {
+  try {
+    if (req.user.role !== 'seller') {
+      return res.status(403).json({ message: 'Only sellers can view stats' });
+    }
+
+    const sellerId = req.user.userId;
+
+    const [statusCounts, totalViews, recentActivity] = await Promise.all([
+      // Status breakdown
+      Phone.aggregate([
+        { $match: { sellerId: sellerId } },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      
+      // Total views across all listings
+      Phone.aggregate([
+        { $match: { sellerId: sellerId } },
+        { $group: { _id: null, totalViews: { $sum: '$views' } } }
+      ]),
+      
+      // Recent activity
+      Phone.find({ sellerId: sellerId })
+        .select('title status createdAt approvedAt rejectedAt views adminNotes')
+        .populate('approvedBy', 'name')
+        .sort({ createdAt: -1 })
+        .limit(10)
+    ]);
+
+    // Format status counts
+    const counts = { pending: 0, approved: 0, rejected: 0, total: 0 };
+    statusCounts.forEach(item => {
+      counts[item._id] = item.count;
+      counts.total += item.count;
+    });
+
+    const totalViewsCount = totalViews.length > 0 ? totalViews[0].totalViews : 0;
+
+    res.json({
+      statusCounts: counts,
+      totalViews: totalViewsCount,
+      recentActivity,
+      summary: {
+        activeListings: counts.approved,
+        pendingApproval: counts.pending,
+        needsAttention: counts.rejected,
+        totalViews: totalViewsCount
+      }
+    });
+  } catch (err) {
+    console.error('Seller stats error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 module.exports = { 
   getPhones, 
   getPhoneById, 
   createPhone, 
   deletePhone, 
-  updatePhone 
+  updatePhone,
+  getSellerStats
 };

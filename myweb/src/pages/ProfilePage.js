@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User, ShoppingCart, Plus, Edit, Star, TrendingUp, DollarSign, Smartphone, Loader, AlertCircle, Camera, Upload, X, Check } from 'lucide-react';
 import { useAuth } from '../utils/AuthContext';
 import { phoneAPI, authAPI, orderAPI, analyticsAPI, apiUtils } from '../utils/api';
@@ -7,7 +7,8 @@ import SellerListingsTab from '../components/SellerListingsTab';
 const ProfilePage = ({ onNavigate }) => {
   const { user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
     activeListings: 0,
@@ -24,22 +25,27 @@ const ProfilePage = ({ onNavigate }) => {
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
+  const fetchingRef = useRef(false);
 
-  useEffect(() => {
+  const fetchProfileData = useCallback(async () => {
+    // Prevent multiple simultaneous fetches
+    if (fetchingRef.current) {
+      console.log('Fetch already in progress, skipping...');
+      return;
+    }
+
     if (!user) {
+      console.log('No user available, redirecting to auth...');
       onNavigate('auth');
       return;
     }
 
-    fetchProfileData();
-  }, [user]);
-
-  const fetchProfileData = async () => {
     try {
+      fetchingRef.current = true;
       setLoading(true);
       setError(null);
 
-      console.log('Fetching profile data for user:', user);
+      console.log('Fetching profile data for user:', user.email);
 
       // Fetch profile data
       const profileResponse = await authAPI.getProfile();
@@ -58,7 +64,8 @@ const ProfilePage = ({ onNavigate }) => {
           })
         ]);
 
-        setListings(listingsResponse.data || []);
+        const listingsData = listingsResponse.data || [];
+        setListings(listingsData);
         
         // Process sales data with better error handling
         let sales = [];
@@ -78,7 +85,6 @@ const ProfilePage = ({ onNavigate }) => {
         setOrders(sales);
 
         // Calculate stats with proper array checks
-        const listingsData = listingsResponse.data || [];
         const activeListings = Array.isArray(listingsData) 
           ? listingsData.filter(phone => phone.isAvailable).length 
           : 0;
@@ -91,7 +97,9 @@ const ProfilePage = ({ onNavigate }) => {
         setStats({
           activeListings,
           totalSold,
-          totalRevenue
+          totalRevenue,
+          ordersPlaced: 0,
+          totalSpent: 0
         });
 
         // Try to fetch analytics if available
@@ -138,6 +146,9 @@ const ProfilePage = ({ onNavigate }) => {
             : 0;
             
           setStats({
+            activeListings: 0,
+            totalSold: 0,
+            totalRevenue: 0,
             ordersPlaced: orderData.length,
             totalSpent
           });
@@ -178,6 +189,9 @@ const ProfilePage = ({ onNavigate }) => {
           
           setOrders([]);
           setStats({
+            activeListings: 0,
+            totalSold: 0,
+            totalRevenue: 0,
             ordersPlaced: 0,
             totalSpent: 0
           });
@@ -200,8 +214,19 @@ const ProfilePage = ({ onNavigate }) => {
       setError(errorMessage);
     } finally {
       setLoading(false);
+      setInitialLoad(false);
+      fetchingRef.current = false;
     }
-  };
+  }, [user, onNavigate]);
+
+  useEffect(() => {
+    // Only fetch on initial load or when user changes
+    if (initialLoad && user) {
+      fetchProfileData();
+    } else if (!user) {
+      onNavigate('auth');
+    }
+  }, [user, initialLoad, fetchProfileData, onNavigate]);
 
   const handleProfilePhotoClick = () => {
     fileInputRef.current?.click();
@@ -278,8 +303,18 @@ const ProfilePage = ({ onNavigate }) => {
   };
 
   if (!user) {
-    onNavigate('auth');
     return null;
+  }
+
+  if (initialLoad && loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black flex items-center justify-center">
+        <div className="text-center">
+          <Loader className="h-16 w-16 text-purple-500 mx-auto mb-4 animate-spin" />
+          <p className="text-gray-400 text-xl">Loading profile...</p>
+        </div>
+      </div>
+    );
   }
 
   const TabButton = ({ tab, icon: Icon, children }) => (
@@ -434,12 +469,6 @@ const ProfilePage = ({ onNavigate }) => {
               <span className="bg-gradient-to-r from-green-400 to-blue-500 px-4 py-2 rounded-full text-sm font-medium shadow-lg shadow-green-500/25 animate-pulse">
                 {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
               </span>
-              {user.role === 'seller' && (
-                <div className="flex items-center bg-gradient-to-r from-yellow-400 to-orange-500 px-4 py-2 rounded-full shadow-lg shadow-yellow-500/25">
-                  <Star className="h-5 w-5 fill-current mr-2 animate-spin-slow" />
-                  <span className="font-medium">{profileData?.rating?.toFixed(1) || '4.8'} Rating</span>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -485,62 +514,62 @@ const ProfilePage = ({ onNavigate }) => {
     </div>
   );
 
-const ListingsTab = () => {
-  const handleViewDetails = (phone) => {
-    console.log('=== ProfilePage handleViewDetails Debug ===');
-    console.log('Phone object received:', phone);
-    console.log('Phone ID:', phone._id);
-    
-    // Pass the full phone object instead of just the ID
-    onNavigate('details', { phone: phone }); // Change this line
-  };
+  const ListingsTab = () => {
+    const handleViewDetails = (phone) => {
+      console.log('=== ProfilePage handleViewDetails Debug ===');
+      console.log('Phone object received:', phone);
+      console.log('Phone ID:', phone._id);
+      
+      // Pass the full phone object instead of just the ID
+      onNavigate('details', { phone: phone });
+    };
 
-  const handleEdit = (phone) => {
-    // Navigate to edit phone page
-    onNavigate('edit-phone', { phoneId: phone._id });
-  };
+    const handleEdit = (phone) => {
+      // Navigate to edit phone page
+      onNavigate('edit-phone', { phoneId: phone._id });
+    };
 
-  const handleDelete = async (phone) => {
-    if (window.confirm(`Are you sure you want to delete "${phone.title}"?\n\nThis action cannot be undone.`)) {
-      try {
-        setError(null);
-        await phoneAPI.deletePhone(phone._id);
-        
-        // Remove from local state immediately for better UX
-        setListings(prev => prev.filter(p => p._id !== phone._id));
-        
-        // Update stats
-        setStats(prev => ({
-          ...prev,
-          activeListings: prev.activeListings - (phone.isAvailable ? 1 : 0)
-        }));
-        
-        console.log('Phone deleted successfully');
-      } catch (err) {
-        console.error('Failed to delete phone:', err);
-        setError(apiUtils.handleError(err));
-        // Refresh data on error to ensure consistency
-        fetchProfileData();
+    const handleDelete = async (phone) => {
+      if (window.confirm(`Are you sure you want to delete "${phone.title}"?\n\nThis action cannot be undone.`)) {
+        try {
+          setError(null);
+          await phoneAPI.deletePhone(phone._id);
+          
+          // Remove from local state immediately for better UX
+          setListings(prev => prev.filter(p => p._id !== phone._id));
+          
+          // Update stats
+          setStats(prev => ({
+            ...prev,
+            activeListings: prev.activeListings - (phone.isAvailable ? 1 : 0)
+          }));
+          
+          console.log('Phone deleted successfully');
+        } catch (err) {
+          console.error('Failed to delete phone:', err);
+          setError(apiUtils.handleError(err));
+          // Refresh data on error to ensure consistency
+          fetchProfileData();
+        }
       }
-    }
-  };
+    };
 
-  const handleAddNew = () => {
-    onNavigate('add-phone');
-  };
+    const handleAddNew = () => {
+      onNavigate('add-phone');
+    };
 
-  return (
-    <SellerListingsTab
-      listings={listings}
-      loading={loading}
-      error={error}
-      onViewDetails={handleViewDetails}
-      onEdit={handleEdit}
-      onDelete={handleDelete}
-      onAddNew={handleAddNew}
-    />
-  );
-};
+    return (
+      <SellerListingsTab
+        listings={listings}
+        loading={loading}
+        error={error}
+        onViewDetails={handleViewDetails}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onAddNew={handleAddNew}
+      />
+    );
+  };
 
   const OrdersTab = () => (
     <div className="animate-slide-up">
@@ -664,10 +693,14 @@ const ListingsTab = () => {
               </div>
               <div className="flex space-x-2">
                 <button
-                  onClick={fetchProfileData}
+                  onClick={() => {
+                    setInitialLoad(true);
+                    fetchProfileData();
+                  }}
                   className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                  disabled={loading}
                 >
-                  Retry
+                  {loading ? 'Loading...' : 'Retry'}
                 </button>
                 <button
                   onClick={clearError}
